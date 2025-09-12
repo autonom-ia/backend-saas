@@ -1,0 +1,18 @@
+{
+  "name": "profile-api-tests",
+  "version": "1.0.0",
+  "description": "Testes de API para o módulo profile",
+  "main": "run-api-tests.js",
+  "scripts": {
+    "test": "node run-api-tests.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2",
+    "aws4": "^1.12.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

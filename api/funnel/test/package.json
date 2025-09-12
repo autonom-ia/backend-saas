@@ -1,0 +1,13 @@
+{
+  "name": "funnel-api-tests",
+  "version": "1.0.0",
+  "description": "Testes para API do módulo funnel",
+  "main": "run-api-tests.js",
+  "scripts": {
+    "test": "node run-api-tests.js"
+  },
+  "dependencies": {
+    "axios": "^0.27.2",
+    "chalk": "^4.1.2"
+  }
+}

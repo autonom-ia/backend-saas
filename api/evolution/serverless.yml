@@ -1,0 +1,133 @@
+service: autonomia-api-evolution
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-domain-manager
+
+custom:
+  customDomain:
+    domainName: api-evolution.autonomia.site
+    basePath: ''
+    stage: ${opt:stage, 'prod'}
+    certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
+    createRoute53Record: false
+    endpointType: 'edge'
+  authorizer:
+    name: cognitoAuthorizer
+    type: COGNITO_USER_POOLS
+    identitySource: method.request.header.Authorization
+    arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+
+  stage: ${opt:stage, 'prod'}
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  # VPC configuração removida para permitir acesso à internet (similar ao serviço clients)
+  # vpc:
+  #   securityGroupIds:
+  #     - 'sg-0e9189ca9e6d0427d'
+  #   subnetIds:
+  #     - 'subnet-07184b6cfa97367e2'
+  #     - 'subnet-000fbcffe0f8d9a11'
+  environment:
+    NODE_ENV: ${opt:stage, 'prod'}
+    DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
+    DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}
+    DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
+    DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
+    DB_SSL_ENABLED: ${ssm:/autonomia/${self:provider.stage}/db/ssl-enabled, 'false'}
+    REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
+    REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
+    CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
+    EVOLUTION_API_URL: ${ssm:/autonomia/${self:provider.stage}/evolution/url, ''}
+    EVOLUTION_API_KEY: ${ssm:/autonomia/${self:provider.stage}/evolution/apikey, ''}
+    # Variáveis de ambiente do Chatwoot (autonomia)
+    AUTONOMIA_CHATWOOT_DB_HOST: ${ssm:/autonomia/chatwoot/db/host, ''}
+    AUTONOMIA_CHATWOOT_DB_PORT: ${ssm:/autonomia/chatwoot/db/port, ''}
+    AUTONOMIA_CHATWOOT_DB_NAME: ${ssm:/autonomia/chatwoot/db/name, ''}
+    AUTONOMIA_CHATWOOT_DB_USER: ${ssm:/autonomia/chatwoot/db/user, ''}
+    AUTONOMIA_CHATWOOT_DB_PASSWORD: ${ssm:/autonomia/chatwoot/db/password, ''}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - rds:*
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ec2:CreateNetworkInterface
+        - ec2:DescribeNetworkInterfaces
+        - ec2:DeleteNetworkInterface
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+      Resource: "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
+    - Effect: Allow
+      Action:
+        - elasticache:*
+      Resource: "*"
+
+functions:
+  createInstance:
+    handler: handlers/create-instance.handler
+    events:
+      - http:
+          path: Autonomia/Evolution/CreateInstance
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+  setChatwoot:
+    handler: handlers/set-chatwoot.handler
+    events:
+      - http:
+          path: Autonomia/Evolution/SetChatwoot
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+  connectInstance:
+    handler: handlers/connect.handler
+    events:
+      - http:
+          path: Autonomia/Evolution/Connect
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                domain: true
+                instance: true
+                number: false
+          authorizer: ${self:custom.authorizer}
+  connectionState:
+    handler: handlers/connection-state.handler
+    events:
+      - http:
+          path: Autonomia/Evolution/ConnectionState
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                domain: true
+                instance: true
+          authorizer: ${self:custom.authorizer}
+
+package:
+  individually: true
+  patterns:
+    - 'handlers/**'
+    - 'services/**'
+    - '../utils/**'
+    - 'node_modules/**'
+    - '!node_modules/.cache/**'
+    - '!**/.env*'
+    - '!**/terraform/**'
+    - '!**/*.test.js'
+    - '!**/coverage/**'
+    - '!test/**'

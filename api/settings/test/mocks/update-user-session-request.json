@@ -1,0 +1,6 @@
+{
+  "pathParameters": {
+    "id": "06f98457-3a61-465c-81b0-da4bbb05d5c5"
+  },
+  "body": "{\"last_access\": \"2025-07-09T15:10:00Z\", \"name\": \"Usuario Atualizado\", \"phone\": \"5531998887755\", \"conversation_funnel_step_id\": \"aa0126a9-4311-440a-b269-57599917e99c\", \"message_time\": 1720019400}"
+}

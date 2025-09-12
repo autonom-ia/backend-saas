@@ -1,0 +1,28 @@
+{
+  "name": "autonomia-backend",
+  "version": "0.1.0",
+  "description": "Backend para o projeto autonom.ia",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate": "node ./shared/migrations/migrate-knex.js",
+    "migrate:status": "node ./shared/migrations/migrate-knex.js --status",
+    "migrate:rollback": "node ./shared/migrations/migrate-knex.js --rollback",
+    "deploy:api": "serverless deploy --config serverless-api.yml",
+    "deploy:api:prod": "serverless deploy --config serverless-api.yml --stage prod",
+    "update:ssm": "node ./scripts/update-ssm-parameters.js",
+    "update:ssm:prod": "node ./scripts/update-ssm-parameters.js --stage=prod"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.840.0",
+    "dotenv": "^16.3.1",
+    "ioredis": "^5.6.1",
+    "knex": "^2.5.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "serverless": "^3.35.2",
+    "serverless-domain-manager": "^8.0.0",
+    "serverless-dotenv-plugin": "^6.0.0"
+  }
+}

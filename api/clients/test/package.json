@@ -1,0 +1,17 @@
+{
+  "name": "clients-api-tests",
+  "version": "1.0.0",
+  "description": "Testes de API para o módulo clients",
+  "main": "run-api-tests.js",
+  "scripts": {
+    "test": "node run-api-tests.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

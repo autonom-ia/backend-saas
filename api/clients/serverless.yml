@@ -1,0 +1,119 @@
+service: autonomia-api-clients
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-domain-manager
+
+custom:
+  customDomain:
+    domainName: api-clients.autonomia.site
+    basePath: ''
+    stage: ${opt:stage, 'prod'}
+    certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
+    createRoute53Record: false
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  # VPC configuração removida para permitir acesso à internet
+  # vpc:
+  #   securityGroupIds:
+  #     - 'sg-0e9189ca9e6d0427d'  # Grupo de segurança do RDS
+  #   subnetIds:
+  #     - 'subnet-07184b6cfa97367e2'  # Subnet us-east-1c
+  #     - 'subnet-000fbcffe0f8d9a11'  # Subnet us-east-1d
+  environment:
+    NODE_ENV: ${opt:stage, 'dev'}
+    # Banco de dados principal (autonomia)
+    DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
+    DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}
+    DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
+    DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
+    # Banco de dados clients
+    CLIENTS_DB_HOST: ${ssm:/autonomia/clients/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    CLIENTS_DB_PORT: ${ssm:/autonomia/clients/db/port, '5432'}
+    CLIENTS_DB_NAME: ${ssm:/autonomia/clients/db/name, 'autonomia_clients'}
+    CLIENTS_DB_USER: ${ssm:/autonomia/clients/db/user, 'autonomia_clients_admin'}
+    CLIENTS_DB_PASSWORD: ${ssm:/autonomia/clients/db/password, ''}
+    # Redis
+    REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, 'autonomia-redis.lfxcgb.ng.0001.use1.cache.amazonaws.com'}
+    REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
+    CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'} # 5 minutos em segundos
+    # Variáveis de ambiente do Chatwoot com prefixo fixo
+    EMPRESTA_CHATWOOT_DB_HOST: ${ssm:/empresta/chatwoot/db/host, ''}
+    EMPRESTA_CHATWOOT_DB_PORT: ${ssm:/empresta/chatwoot/db/port, ''}
+    EMPRESTA_CHATWOOT_DB_NAME: ${ssm:/empresta/chatwoot/db/name, ''}
+    EMPRESTA_CHATWOOT_DB_USER: ${ssm:/empresta/chatwoot/db/user, ''}
+    EMPRESTA_CHATWOOT_DB_PASSWORD: ${ssm:/empresta/chatwoot/db/password, ''}
+    # Variáveis de ambiente do Chatwoot (tenant autonomia)
+    AUTONOMIA_CHATWOOT_DB_HOST: ${ssm:/autonomia/chatwoot/db/host, ''}
+    AUTONOMIA_CHATWOOT_DB_PORT: ${ssm:/autonomia/chatwoot/db/port, ''}
+    AUTONOMIA_CHATWOOT_DB_NAME: ${ssm:/autonomia/chatwoot/db/name, ''}
+    AUTONOMIA_CHATWOOT_DB_USER: ${ssm:/autonomia/chatwoot/db/user, ''}
+    AUTONOMIA_CHATWOOT_DB_PASSWORD: ${ssm:/autonomia/chatwoot/db/password, ''}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - rds:*
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ec2:CreateNetworkInterface
+        - ec2:DescribeNetworkInterfaces
+        - ec2:DeleteNetworkInterface
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+        - ssm:GetParameters
+      Resource: 
+        - "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
+        - "arn:aws:ssm:us-east-1:*:parameter/empresta/chatwoot/*"
+        - "arn:aws:ssm:us-east-1:*:parameter/autonomia/chatwoot/*"
+    - Effect: Allow
+      Action:
+        - elasticache:*
+      Resource: "*"
+
+functions:
+  getConversations:
+    handler: handlers/get-conversations.handler
+    events:
+      - http:
+          path: /conversations
+          method: get
+          cors: true
+  unassignInactiveContacts:
+    handler: handlers/unassign-inactive-contacts.handler
+    events:
+      - http:
+          path: Autonomia/Clients/UnassignInactiveContacts
+          method: post
+          cors: true
+      - schedule:
+          name: unassign-inactive-contacts-schedule
+          description: 'Executa a cada 10 minutos para desalocar contatos inativos'
+          rate: rate(10 minutes)
+          enabled: true
+          
+  assignContacts:
+    handler: handlers/assign-contacts.handler
+    events:
+      - http:
+          path: Autonomia/Clients/AssignContacts
+          method: post
+          cors: true
+
+  getLoggedUsers:
+    handler: handlers/get-logged-users.handler
+    events:
+      - http:
+          path: Autonomia/Clients/LoggedUsers
+          method: get
+          cors: true

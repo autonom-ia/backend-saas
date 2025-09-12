@@ -1,0 +1,22 @@
+{
+  "name": "autonomia-api-funnel",
+  "version": "1.0.0",
+  "description": "Módulo de funis de conversação da API autonomia.ia",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "serverless deploy --stage prod",
+    "deploy:prod": "serverless deploy --stage prod",
+    "create:domain": "serverless create_domain --stage prod"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.840.0",
+    "dotenv": "^16.3.1",
+    "ioredis": "^5.6.1",
+    "knex": "^2.5.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "serverless": "^3.35.2",
+    "serverless-domain-manager": "^8.0.0"
+  }
+}

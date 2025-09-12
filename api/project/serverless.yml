@@ -1,0 +1,205 @@
+service: autonomia-api-project
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-domain-manager
+
+custom:
+  customDomain:
+    domainName: api-project.autonomia.site
+    basePath: ''
+    stage: ${opt:stage, 'prod'}
+    certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
+    createRoute53Record: false
+    endpointType: 'edge'
+  authorizer:
+    name: cognitoAuthorizer
+    type: COGNITO_USER_POOLS
+    identitySource: method.request.header.Authorization
+    arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+
+  stage: ${opt:stage, 'prod'}
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  vpc:
+    securityGroupIds:
+      - 'sg-0e9189ca9e6d0427d'
+    subnetIds:
+      - 'subnet-07184b6cfa97367e2'
+      - 'subnet-000fbcffe0f8d9a11'
+  environment:
+    NODE_ENV: ${opt:stage, 'prod'}
+    DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
+    DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}
+    DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
+    DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
+    DB_SSL_ENABLED: ${ssm:/autonomia/${self:provider.stage}/db/ssl-enabled, 'false'}
+    REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
+    REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
+    CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - rds:*
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ec2:CreateNetworkInterface
+        - ec2:DescribeNetworkInterfaces
+        - ec2:DeleteNetworkInterface
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+      Resource: "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
+    - Effect: Allow
+      Action:
+        - elasticache:*
+      Resource: "*"
+
+functions:
+  # Project CRUD
+  listProjects:
+    handler: handlers/project.list
+    events:
+      - http:
+          path: Autonomia/Project/Projects
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                productId: false
+          authorizer: ${self:custom.authorizer}
+
+  # Project listing by authenticated user profile
+  listProjectsForUser:
+    handler: handlers/list-projects.handler
+    events:
+      - http:
+          path: Autonomia/Project/ProjectsForUser
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                productId: false
+          authorizer: ${self:custom.authorizer}
+
+  getProject:
+    handler: handlers/project.get
+    events:
+      - http:
+          path: Autonomia/Project/Projects/{projectId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                projectId: true
+          authorizer: ${self:custom.authorizer}
+
+  createProject:
+    handler: handlers/project.create
+    events:
+      - http:
+          path: Autonomia/Project/Projects
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateProject:
+    handler: handlers/project.update
+    events:
+      - http:
+          path: Autonomia/Project/Projects/{projectId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                projectId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteProject:
+    handler: handlers/project.remove
+    events:
+      - http:
+          path: Autonomia/Project/Projects/{projectId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                projectId: true
+          authorizer: ${self:custom.authorizer}
+
+  # Project Timeline CRUD
+  listProjectTimelines:
+    handler: handlers/project_timeline.list
+    events:
+      - http:
+          path: Autonomia/Project/ProjectTimelines
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                projectId: false
+                productId: false
+          authorizer: ${self:custom.authorizer}
+
+  getProjectTimeline:
+    handler: handlers/project_timeline.get
+    events:
+      - http:
+          path: Autonomia/Project/ProjectTimelines/{code}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                code: true
+          authorizer: ${self:custom.authorizer}
+
+  createProjectTimeline:
+    handler: handlers/project_timeline.create
+    events:
+      - http:
+          path: Autonomia/Project/ProjectTimelines
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateProjectTimeline:
+    handler: handlers/project_timeline.update
+    events:
+      - http:
+          path: Autonomia/Project/ProjectTimelines/{code}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                code: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteProjectTimeline:
+    handler: handlers/project_timeline.remove
+    events:
+      - http:
+          path: Autonomia/Project/ProjectTimelines/{code}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                code: true
+          authorizer: ${self:custom.authorizer}

@@ -1,0 +1,8 @@
+{
+  "ACCOUNT_ID": "3559a235-c497-4086-afd8-6f04c6f537d6",
+  "API_URL": "https://api-clients.autonomia.site",
+  "USER_SESSION_ID": "06f98457-3a61-465c-81b0-da4bbb05d5c5",
+  "ENDPOINTS": {
+    "unassignInactiveContacts": "/Autonomia/Clients/UnassignInactiveContacts"
+  }
+}

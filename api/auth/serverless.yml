@@ -1,0 +1,126 @@
+service: autonomia-api-auth
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-domain-manager
+
+custom:
+  customDomain:
+    domainName: api-auth.autonomia.site
+    basePath: ''
+    stage: ${self:provider.stage}
+    certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e' # Reutilizando o mesmo certificado
+    createRoute53Record: false
+    endpointType: 'edge'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'prod'}
+  region: us-east-1
+  environment:
+    COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+    COGNITO_USER_POOL_CLIENT_ID: !Ref CognitoUserPoolClient
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "cognito-idp:InitiateAuth"
+            - "cognito-idp:SignUp"
+            - "cognito-idp:ForgotPassword"
+            - "cognito-idp:ConfirmForgotPassword"
+          Resource: !GetAtt CognitoUserPool.Arn
+
+functions:
+  login:
+    handler: handlers/login.handler
+    events:
+      - http:
+          path: /login
+          method: post
+          cors: true
+
+  register:
+    handler: handlers/register.handler
+    events:
+      - http:
+          path: /register
+          method: post
+          cors: true
+
+  confirm:
+    handler: handlers/confirm.handler
+    events:
+      - http:
+          path: /confirm
+          method: post
+          cors: true
+
+  forgotPassword:
+    handler: handlers/forgotPassword.handler
+    events:
+      - http:
+          path: /forgot-password
+          method: post
+          cors: true
+
+  resetPassword:
+    handler: handlers/resetPassword.handler
+    events:
+      - http:
+          path: /reset-password
+          method: post
+          cors: true
+
+package:
+  individually: true
+  patterns:
+    - 'handlers/**'
+    - '!node_modules/**'
+    - '!**/.env*'
+
+resources:
+  Resources:
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-${self:provider.stage}-user-pool
+        Schema:
+          - Name: email
+            AttributeDataType: String
+            Mutable: true
+            Required: true
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+        AutoVerifiedAttributes:
+          - email
+
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:service}-${self:provider.stage}-client
+        UserPoolId: !Ref CognitoUserPool
+        GenerateSecret: false
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+
+  Outputs:
+    UserPoolId:
+      Description: "The ID of the Cognito User Pool"
+      Value: !Ref CognitoUserPool
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserPoolId
+    UserPoolClientId:
+      Description: "The ID of the Cognito User Pool Client"
+      Value: !Ref CognitoUserPoolClient
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserPoolClientId
+    UserPoolArn:
+      Description: "The ARN of the Cognito User Pool"
+      Value: !GetAtt CognitoUserPool.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserPoolArn

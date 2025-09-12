@@ -1,0 +1,99 @@
+service: autonomia-api-funnel
+
+plugins:
+  - serverless-domain-manager
+
+custom:
+  customDomain:
+    domainName: api-funnel.autonomia.site
+    basePath: ''
+    stage: ${opt:stage, 'prod'}
+    certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
+    createRoute53Record: false
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  vpc:
+    securityGroupIds:
+      - 'sg-0e9189ca9e6d0427d'  # Grupo de segurança do RDS
+    subnetIds:
+      - 'subnet-07184b6cfa97367e2'  # Subnet us-east-1c (mesma do RDS)
+      - 'subnet-000fbcffe0f8d9a11'  # Subnet us-east-1d (mesma do RDS)
+  environment:
+    NODE_ENV: ${opt:stage, 'dev'}
+    DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
+    DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}
+    DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
+    DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
+    DB_SSL_ENABLED: ${ssm:/autonomia/${self:provider.stage}/db/ssl-enabled, 'true'}
+    REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
+    REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
+    CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'} # 5 minutos em segundos
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+        - ssm:GetParameters
+      Resource:
+        - arn:aws:ssm:us-east-1:727799789224:parameter/autonomia/*
+
+functions:
+  getAccountFunnel:
+    handler: handlers/get-account-funnel.handler
+    events:
+      - http:
+          path: Autonomia/Funnel/GetAccountFunnel
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+
+  createConversationRegister:
+    handler: handlers/create-conversation-register.handler
+    events:
+      - http:
+          path: Autonomia/Funnel/CreateConversationRegister
+          method: post
+          cors: true
+          
+  getPendingMessages:
+    handler: handlers/get-pending-messages.handler
+    events:
+      - http:
+          path: Autonomia/Funnel/GetPendingMessages
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+                
+  registerSentMessage:
+    handler: handlers/register-sent-message.handler
+    events:
+      - http:
+          path: Autonomia/Funnel/RegisterSentMessage
+          method: post
+          cors: true
+
+package:
+  individually: true
+  patterns:
+    - 'handlers/**'
+    - 'services/**'
+    - '../utils/**'  # Incluir utils
+    - 'node_modules/**'
+    - '!node_modules/.cache/**'
+    - '!**/.env*'
+    - '!**/terraform/**'
+    - '!**/*.test.js'
+    - '!**/coverage/**'
+    - '!test/**'  # Excluir explicitamente a pasta de testes

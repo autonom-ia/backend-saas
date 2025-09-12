@@ -1,0 +1,547 @@
+service: autonomia-api-saas
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-domain-manager
+
+custom:
+  customDomain:
+    domainName: api-saas.autonomia.site
+    basePath: ''
+    stage: ${opt:stage, 'prod'}
+    certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
+    createRoute53Record: false
+    endpointType: 'edge'
+  authorizer:
+    name: cognitoAuthorizer
+    type: COGNITO_USER_POOLS
+    identitySource: method.request.header.Authorization
+    arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+
+  stage: ${opt:stage, 'prod'}
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  vpc:
+    securityGroupIds:
+      - 'sg-0e9189ca9e6d0427d'
+    subnetIds:
+      - 'subnet-07184b6cfa97367e2'
+      - 'subnet-000fbcffe0f8d9a11'
+  environment:
+    NODE_ENV: ${opt:stage, 'prod'}
+    DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
+    DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}
+    DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
+    DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
+    DB_SSL_ENABLED: ${ssm:/autonomia/${self:provider.stage}/db/ssl-enabled, 'false'}
+    REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
+    REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
+    CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - rds:*
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ec2:CreateNetworkInterface
+        - ec2:DescribeNetworkInterfaces
+        - ec2:DeleteNetworkInterface
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+      Resource: "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
+    - Effect: Allow
+      Action:
+        - elasticache:*
+      Resource: "*"
+
+functions:
+  listProducts:
+    handler: handlers/list-products.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products
+          method: get
+          cors: true
+          authorizer: ${self:custom.authorizer}
+          
+  getProduct:
+    handler: handlers/get-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products/{productId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                productId: true
+          authorizer: ${self:custom.authorizer}
+          
+  createProduct:
+    handler: handlers/create-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+          
+  updateProduct:
+    handler: handlers/update-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products/{productId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                productId: true
+          authorizer: ${self:custom.authorizer}
+          
+  deleteProduct:
+    handler: handlers/delete-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products/{productId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                productId: true
+          authorizer: ${self:custom.authorizer}
+
+  listAccounts:
+    handler: handlers/list-accounts.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                productId: true
+          authorizer: ${self:custom.authorizer}
+
+  getAccount:
+    handler: handlers/get-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
+  createAccount:
+    handler: handlers/create-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateAccount:
+    handler: handlers/update-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteAccount:
+    handler: handlers/delete-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
+  listProductParameters:
+    handler: handlers/list-product-parameters.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ProductParameters
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                productId: true
+          authorizer: ${self:custom.authorizer}
+
+  getProductParameter:
+    handler: handlers/get-product-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ProductParameters/{parameterId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                parameterId: true
+          authorizer: ${self:custom.authorizer}
+
+  createProductParameter:
+    handler: handlers/create-product-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ProductParameters
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateProductParameter:
+    handler: handlers/update-product-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ProductParameters/{parameterId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                parameterId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteProductParameter:
+    handler: handlers/delete-product-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ProductParameters/{parameterId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                parameterId: true
+          authorizer: ${self:custom.authorizer}
+
+  listAccountParameters:
+    handler: handlers/list-account-parameters.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AccountParameters
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
+  getAccountParameter:
+    handler: handlers/get-account-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AccountParameters/{parameterId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                parameterId: true
+          authorizer: ${self:custom.authorizer}
+
+  createAccountParameter:
+    handler: handlers/create-account-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AccountParameters
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateAccountParameter:
+    handler: handlers/update-account-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AccountParameters/{parameterId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                parameterId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteAccountParameter:
+    handler: handlers/delete-account-parameter.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AccountParameters/{parameterId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                parameterId: true
+          authorizer: ${self:custom.authorizer}
+
+  listConversationFunnels:
+    handler: handlers/list-conversation-funnels.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnels
+          method: get
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  getConversationFunnel:
+    handler: handlers/get-conversation-funnel.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnels/{funnelId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                funnelId: true
+          authorizer: ${self:custom.authorizer}
+
+  createConversationFunnel:
+    handler: handlers/create-conversation-funnel.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnels
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateConversationFunnel:
+    handler: handlers/update-conversation-funnel.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnels/{funnelId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                funnelId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteConversationFunnel:
+    handler: handlers/delete-conversation-funnel.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnels/{funnelId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                funnelId: true
+          authorizer: ${self:custom.authorizer}
+
+  listConversationFunnelSteps:
+    handler: handlers/list-conversation-funnel-steps.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelSteps
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
+  getConversationFunnelStep:
+    handler: handlers/get-conversation-funnel-step.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelSteps/{stepId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                stepId: true
+          authorizer: ${self:custom.authorizer}
+
+  createConversationFunnelStep:
+    handler: handlers/create-conversation-funnel-step.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelSteps
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateConversationFunnelStep:
+    handler: handlers/update-conversation-funnel-step.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelSteps/{stepId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                stepId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteConversationFunnelStep:
+    handler: handlers/delete-conversation-funnel-step.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelSteps/{stepId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                stepId: true
+          authorizer: ${self:custom.authorizer}
+
+  listConversationFunnelStepMessages:
+    handler: handlers/list-conversation-funnel-step-messages.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelStepMessages
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
+  getConversationFunnelStepMessage:
+    handler: handlers/get-conversation-funnel-step-message.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelStepMessages/{messageId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                messageId: true
+          authorizer: ${self:custom.authorizer}
+
+  createConversationFunnelStepMessage:
+    handler: handlers/create-conversation-funnel-step-message.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelStepMessages
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateConversationFunnelStepMessage:
+    handler: handlers/update-conversation-funnel-step-message.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelStepMessages/{messageId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                messageId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteConversationFunnelStepMessage:
+    handler: handlers/delete-conversation-funnel-step-message.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ConversationFunnelStepMessages/{messageId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                messageId: true
+          authorizer: ${self:custom.authorizer}
+
+  # Inbox CRUD
+  listInboxes:
+    handler: handlers/list-inboxes.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
+  getInbox:
+    handler: handlers/get-inbox.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+          authorizer: ${self:custom.authorizer}
+
+  createInbox:
+    handler: handlers/create-inbox.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateInbox:
+    handler: handlers/update-inbox.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteInbox:
+    handler: handlers/delete-inbox.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+          authorizer: ${self:custom.authorizer}

@@ -1,0 +1,3 @@
+{
+  "body": "{\"user_session_id\": \"06f98457-3a61-465c-81b0-da4bbb05d5c5\", \"product_id\": \"83678adb-39c4-444c-bfb3-d8955aab5d47\", \"account_id\": \"3559a235-c497-4086-afd8-6f04c6f537d6\", \"chatwoot_account\": \"12\", \"chatwoot_inbox\": \"42\", \"chatwoot_conversations\": \"5\", \"conversation_funnel_step_id\": \"aa0126a9-4311-440a-b269-57599917e99c\", \"summary\": \"Cliente com dúvidas sobre integração\", \"last_timestamptz\": \"2025-07-09T14:45:00Z\", \"declared_interests\": \"Integração com Whatsapp\", \"mentioned_products\": \"Chatbot, API\", \"points_attention_objections\": \"Preocupado com preço e dificuldade de implementação\"}"
+}

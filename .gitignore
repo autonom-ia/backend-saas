@@ -1,0 +1,49 @@
+# Environment variables
+.env
+.env.*
+
+# Node dependencies
+node_modules/
+
+# Build outputs / bundles
+.dist/
+dist/
+.build/
+build/
+.out/
+out/
+
+# Serverless / packaging artifacts
+.serverless/
+.webpack/
+.migrations-package/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Coverage / test reports
+coverage/
+.nyc_output/
+
+# OS / editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local databases / emulators
+.dynamodb/
+.firebase/
+
+# Misc caches
+.cache/
+.parcel-cache/
+
+# Temporary files
+*.tmp
+*.temp

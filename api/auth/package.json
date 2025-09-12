@@ -1,0 +1,16 @@
+{
+  "name": "autonomia-api-auth",
+  "version": "1.0.0",
+  "description": "Módulo de autenticação centralizado com Cognito",
+  "scripts": {
+    "deploy": "serverless deploy --stage prod"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.525.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "serverless": "^3.35.2",
+    "serverless-domain-manager": "^7.3.7"
+  }
+}

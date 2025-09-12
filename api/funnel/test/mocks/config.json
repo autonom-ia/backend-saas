@@ -1,0 +1,10 @@
+{
+  "ACCOUNT_ID": "3559a235-c497-4086-afd8-6f04c6f537d6",
+  "API_URL": "https://api-funnel.autonomia.site",
+  "ENDPOINTS": {
+    "getAccountFunnel": "/Autonomia/Funnel/GetAccountFunnel",
+    "getPendingMessages": "/Autonomia/Funnel/GetPendingMessages",
+    "createConversationRegister": "/Autonomia/Funnel/CreateConversationRegister",
+    "registerSentMessage": "/Autonomia/Funnel/RegisterSentMessage"
+  }
+}
