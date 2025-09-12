@@ -1,0 +1,8 @@
+# Ignore Lambda Layers directories created for packaging
+layers/
+**/layers/
+*/layers/
+
+# Common build artifacts (kept focused; layers are the priority per request)
+.serverless/
+dist/
