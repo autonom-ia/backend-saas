@@ -8,17 +8,9 @@
     "deploy:prod": "serverless deploy --stage prod",
     "create:domain": "serverless create_domain --stage prod"
   },
-  "dependencies": {
-    "@aws-sdk/client-ssm": "^3.840.0",
-    "dotenv": "^16.3.1",
-    "ioredis": "^5.6.1",
-    "knex": "^2.5.1",
-    "pg": "^8.16.3"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "esbuild": "^0.25.8",
     "serverless": "^3.35.2",
-    "serverless-domain-manager": "^8.0.0",
-    "serverless-esbuild": "^1.55.1"
+    "serverless-domain-manager": "^8.0.0"
   }
 }

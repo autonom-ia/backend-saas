@@ -1,21 +1,14 @@
 {
   "name": "autonomia-api-evolution",
   "version": "1.0.0",
-  "description": "Serviços para integração com Evolution API (instâncias WhatsApp, Chatwoot, conexão e status).",
+  "description": "Serviço Evolution para integrações com provedores externos.",
   "main": "index.js",
   "scripts": {
     "deploy": "serverless deploy --stage prod",
     "deploy:prod": "serverless deploy --stage prod",
     "create:domain": "serverless create_domain --stage prod"
   },
-  "dependencies": {
-    "@aws-sdk/client-ssm": "^3.840.0",
-    "dotenv": "^16.3.1",
-    "ioredis": "^5.6.1",
-    "knex": "^2.5.1",
-    "pg": "^8.16.3",
-    "axios": "^1.7.7"
-  },
+  "dependencies": {},
   "devDependencies": {
     "serverless": "^3.35.2",
     "serverless-domain-manager": "^8.0.0"

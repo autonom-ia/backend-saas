@@ -11,6 +11,13 @@ custom:
     certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
     createRoute53Record: false
 
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
+
 provider:
   name: aws
   runtime: nodejs18.x
@@ -46,6 +53,8 @@ provider:
 functions:
   getAccountFunnel:
     handler: handlers/get-account-funnel.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Funnel/GetAccountFunnel
@@ -58,6 +67,8 @@ functions:
 
   createConversationRegister:
     handler: handlers/create-conversation-register.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Funnel/CreateConversationRegister
@@ -66,6 +77,8 @@ functions:
           
   getPendingMessages:
     handler: handlers/get-pending-messages.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Funnel/GetPendingMessages
@@ -78,6 +91,8 @@ functions:
                 
   registerSentMessage:
     handler: handlers/register-sent-message.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Funnel/RegisterSentMessage
@@ -87,13 +102,13 @@ functions:
 package:
   individually: true
   patterns:
-    - 'handlers/**'
-    - 'services/**'
-    - '../utils/**'  # Incluir utils
-    - 'node_modules/**'
-    - '!node_modules/.cache/**'
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
     - '!**/.env*'
-    - '!**/terraform/**'
-    - '!**/*.test.js'
-    - '!**/coverage/**'
-    - '!test/**'  # Excluir explicitamente a pasta de testes
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'

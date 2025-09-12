@@ -14,6 +14,13 @@ custom:
     createRoute53Record: false
     endpointType: 'edge'
 
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
+
 provider:
   name: aws
   runtime: nodejs18.x
@@ -36,6 +43,8 @@ provider:
 functions:
   login:
     handler: handlers/login.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: /login
@@ -44,6 +53,8 @@ functions:
 
   register:
     handler: handlers/register.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: /register
@@ -52,6 +63,8 @@ functions:
 
   confirm:
     handler: handlers/confirm.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: /confirm
@@ -60,6 +73,8 @@ functions:
 
   forgotPassword:
     handler: handlers/forgotPassword.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: /forgot-password
@@ -68,6 +83,8 @@ functions:
 
   resetPassword:
     handler: handlers/resetPassword.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: /reset-password
@@ -77,9 +94,16 @@ functions:
 package:
   individually: true
   patterns:
-    - 'handlers/**'
-    - '!node_modules/**'
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
     - '!**/.env*'
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'
 
 resources:
   Resources:

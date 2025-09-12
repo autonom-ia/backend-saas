@@ -19,6 +19,27 @@ custom:
     identitySource: method.request.header.Authorization
     arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
 
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
+
+package:
+  individually: true
+  patterns:
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
+    - '!**/.env*'
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'
+
 provider:
   name: aws
   runtime: nodejs18.x
@@ -68,6 +89,8 @@ functions:
   # Project CRUD
   listProjects:
     handler: handlers/project.list
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/Projects
@@ -82,6 +105,8 @@ functions:
   # Project listing by authenticated user profile
   listProjectsForUser:
     handler: handlers/list-projects.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/ProjectsForUser
@@ -95,6 +120,8 @@ functions:
 
   getProject:
     handler: handlers/project.get
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/Projects/{projectId}
@@ -108,6 +135,8 @@ functions:
 
   createProject:
     handler: handlers/project.create
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/Projects
@@ -117,6 +146,8 @@ functions:
 
   updateProject:
     handler: handlers/project.update
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/Projects/{projectId}
@@ -130,6 +161,8 @@ functions:
 
   deleteProject:
     handler: handlers/project.remove
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/Projects/{projectId}
@@ -144,6 +177,8 @@ functions:
   # Project Timeline CRUD
   listProjectTimelines:
     handler: handlers/project_timeline.list
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/ProjectTimelines
@@ -158,6 +193,8 @@ functions:
 
   getProjectTimeline:
     handler: handlers/project_timeline.get
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/ProjectTimelines/{code}
@@ -171,6 +208,8 @@ functions:
 
   createProjectTimeline:
     handler: handlers/project_timeline.create
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/ProjectTimelines
@@ -180,6 +219,8 @@ functions:
 
   updateProjectTimeline:
     handler: handlers/project_timeline.update
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/ProjectTimelines/{code}
@@ -193,6 +234,8 @@ functions:
 
   deleteProjectTimeline:
     handler: handlers/project_timeline.remove
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Project/ProjectTimelines/{code}

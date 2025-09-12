@@ -75,9 +75,43 @@ mkdir -p $DIST_DIR/handlers
 mkdir -p $DIST_DIR/services
 mkdir -p $DIST_DIR/utils
 
-# Copiar arquivos de configuração e non-js
+# Copiar Lambda Layers (se existirem) e instalar suas dependências
+if [ -d "$MODULE_DIR/layers" ]; then
+  echo -e "${YELLOW}Copiando Lambda Layers...${NC}"
+  rsync -a --exclude "node_modules" "$MODULE_DIR/layers/" "$DIST_DIR/layers/"
+
+  # Instalar dependências da layer common (se existir package.json)
+  if [ -f "$MODULE_DIR/layers/common/nodejs/package.json" ]; then
+    echo -e "${YELLOW}Instalando dependências da Layer common...${NC}"
+    mkdir -p "$DIST_DIR/layers/common/nodejs"
+    cp "$MODULE_DIR/layers/common/nodejs/package.json" "$DIST_DIR/layers/common/nodejs/"
+    pushd "$DIST_DIR/layers/common/nodejs" >/dev/null
+    echo -e "${BLUE}[Layer common] npm install (omit dev/optional)...${NC}"
+    npm install --omit=dev --omit=optional --no-audit --no-fund || {
+      echo -e "${YELLOW}[Layer common] Falha no npm install, tentando novamente limpando cache...${NC}"
+      npm cache verify || true
+      npm install --omit=dev --omit=optional --no-audit --no-fund
+    }
+    # Não incluir lockfile no pacote final da layer para evitar inconsistências
+    rm -f package-lock.json 2>/dev/null || true
+    popd >/dev/null
+  fi
+fi
+
+# Copiar arquivos de configuração e non-js (excluindo arquivos desnecessários)
 # No macOS não há a opção --parents, então precisamos usar um método alternativo
-find $MODULE_DIR -type f -not -path "*/node_modules/*" -not -path "*/dist/*" -not -name "*.js" | while read file; do
+find $MODULE_DIR -type f \
+  -not -path "*/node_modules/*" \
+  -not -path "*/dist/*" \
+  -not -path "*/test/*" \
+  -not -path "*/tests/*" \
+  -not -name "*.js" \
+  -not -name "*.md" \
+  -not -name "*.map" \
+  -not -name "package-lock.json" \
+  -not -name ".npmrc" \
+  -not -name ".env*" \
+  | while read file; do
   # Obter caminho relativo ao MODULE_DIR
   rel_path=$(echo "$file" | sed "s|^$MODULE_DIR/||")
   # Criar o diretório de destino
@@ -100,8 +134,7 @@ process_js_files() {
     terser $file \
       --compress passes=2,drop_console=false \
       --mangle toplevel=true,reserved=['handler','exports','require','module'] \
-      --output $target_dir/$filename \
-      --source-map "root='src',url='$filename.map'"
+      --output $target_dir/$filename
   done
 }
 
@@ -129,17 +162,32 @@ for file in $(find $API_DIR/utils -name "*.js"); do
   terser $file \
     --compress passes=2 \
     --mangle toplevel=true,reserved=['exports','require','module'] \
-    --output $DIST_DIR/utils/$filename \
-    --source-map "root='src',url='$filename.map'"
+    --output $DIST_DIR/utils/$filename
 done
 
 # Copiar package.json e instalar dependências no dist
 echo -e "${YELLOW}Configurando package.json...${NC}"
 cp $MODULE_DIR/package.json $DIST_DIR/
+if [ -f "$MODULE_DIR/package-lock.json" ]; then
+  echo -e "${YELLOW}Copiando package-lock.json para build reprodutível...${NC}"
+  cp $MODULE_DIR/package-lock.json $DIST_DIR/
+fi
 
 # Instalar apenas dependências de produção no dist
 cd $DIST_DIR
-npm install --production --no-audit
+# Preferir instalação reprodutível e enxuta
+if [ -f "package-lock.json" ]; then
+  echo -e "${YELLOW}Instalando dependências (ci, omit dev/optional)...${NC}"
+  npm ci --omit=dev --omit=optional --no-audit --no-fund
+else
+  echo -e "${YELLOW}Instalando dependências (production, omit optional)...${NC}"
+  npm install --production --omit=optional --no-audit --no-fund
+fi
+
+# Remover package-lock.json para não ser incluído no pacote final
+if [ -f "package-lock.json" ]; then
+  rm -f package-lock.json
+fi
 
 echo -e "${BLUE}Build completado com sucesso.${NC}"
 

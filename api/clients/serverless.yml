@@ -1,3 +1,16 @@
+package:
+  individually: true
+  patterns:
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
+    - '!**/.env*'
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'
 service: autonomia-api-clients
 
 frameworkVersion: '3'
@@ -12,6 +25,13 @@ custom:
     stage: ${opt:stage, 'prod'}
     certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
     createRoute53Record: false
+
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
 
 provider:
   name: aws
@@ -84,6 +104,8 @@ provider:
 functions:
   getConversations:
     handler: handlers/get-conversations.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: /conversations
@@ -91,6 +113,8 @@ functions:
           cors: true
   unassignInactiveContacts:
     handler: handlers/unassign-inactive-contacts.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Clients/UnassignInactiveContacts
@@ -104,6 +128,8 @@ functions:
           
   assignContacts:
     handler: handlers/assign-contacts.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Clients/AssignContacts
@@ -112,6 +138,8 @@ functions:
 
   getLoggedUsers:
     handler: handlers/get-logged-users.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Clients/LoggedUsers

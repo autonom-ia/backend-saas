@@ -19,6 +19,32 @@ custom:
     identitySource: method.request.header.Authorization
     arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
 
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
+    package:
+      include:
+        - node_modules/pg/**
+        - node_modules/knex/**
+        - node_modules/ioredis/**
+
+package:
+  individually: true
+  patterns:
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
+    - '!**/.env*'
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'
+
 provider:
   name: aws
   runtime: nodejs18.x
@@ -67,6 +93,8 @@ functions:
   # Template Message
   listTemplateMessages:
     handler: handlers/list-template-messages.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages
@@ -80,6 +108,8 @@ functions:
 
   getTemplateMessage:
     handler: handlers/get-template-message.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages/{templateMessageId}
@@ -93,6 +123,8 @@ functions:
 
   createTemplateMessage:
     handler: handlers/create-template-message.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages
@@ -102,6 +134,8 @@ functions:
 
   updateTemplateMessage:
     handler: handlers/update-template-message.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages/{templateMessageId}
@@ -116,6 +150,8 @@ functions:
   # Message Logs
   createMessageLog:
     handler: handlers/create-message-log.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/MessageLogs
@@ -126,6 +162,8 @@ functions:
   # Chat Memory
   createChatMemory:
     handler: handlers/create-chat-memory.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/ChatMemory
@@ -136,6 +174,8 @@ functions:
   # Campaigns
   listCampaigns:
     handler: handlers/list-campaigns.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/Campaigns
@@ -148,6 +188,8 @@ functions:
           authorizer: ${self:custom.authorizer}
   createCampaign:
     handler: handlers/create-campaign.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/Campaigns

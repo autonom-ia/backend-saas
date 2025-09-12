@@ -19,6 +19,27 @@ custom:
     identitySource: method.request.header.Authorization
     arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
 
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
+
+package:
+  individually: true
+  patterns:
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
+    - '!**/.env*'
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'
+
 provider:
   name: aws
   runtime: nodejs18.x
@@ -67,6 +88,8 @@ provider:
 functions:
   registerUser:
     handler: handlers/register.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Profile/Register
@@ -75,6 +98,8 @@ functions:
           
   getUserByEmail:
     handler: handlers/get-user-by-email.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Profile/Users/email
