@@ -99,6 +99,60 @@ functions:
           method: post
           cors: true
 
+  listKanbanItems:
+    handler: handlers/list-kanban-items.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Funnel/KanbanItems
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: false
+
+  getKanbanItem:
+    handler: handlers/get-kanban-item.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Funnel/KanbanItems/{id}
+          method: get
+          cors: true
+
+  createKanbanItem:
+    handler: handlers/create-kanban-item.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Funnel/KanbanItems
+          method: post
+          cors: true
+
+  updateKanbanItem:
+    handler: handlers/update-kanban-item.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Funnel/KanbanItems/{id}
+          method: put
+          cors: true
+
+  deleteKanbanItem:
+    handler: handlers/delete-kanban-item.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Funnel/KanbanItems/{id}
+          method: delete
+          cors: true
+
 package:
   individually: true
   patterns:
