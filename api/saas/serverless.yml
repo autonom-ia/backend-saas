@@ -19,6 +19,27 @@ custom:
     identitySource: method.request.header.Authorization
     arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
 
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
+
+package:
+  individually: true
+  patterns:
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
+    - '!**/.env*'
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'
+
 provider:
   name: aws
   runtime: nodejs18.x
@@ -27,6 +48,8 @@ provider:
   region: us-east-1
   memorySize: 512
   timeout: 30
+  layers:
+    - { Ref: CommonLibsLambdaLayer }
   vpc:
     securityGroupIds:
       - 'sg-0e9189ca9e6d0427d'
