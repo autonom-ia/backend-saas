@@ -568,3 +568,17 @@ functions:
               paths:
                 inboxId: true
           authorizer: ${self:custom.authorizer}
+
+  # Kanban items (moved from funnel to saas)
+  listKanbanItems:
+    handler: handlers/list-kanban-items.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KanbanItems
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: false
+          authorizer: ${self:custom.authorizer}
