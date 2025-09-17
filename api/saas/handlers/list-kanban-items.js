@@ -1,5 +1,5 @@
 /**
- * Handler para listar itens do Kanban com filtros e joins para nomes relacionados
+ * SAAS handler para listar itens do Kanban (proxy para serviço do módulo funnel)
  */
 const { listKanbanItems } = require('../services/kanban-items-service');
 const { success, error } = require('../utils/response');
@@ -17,7 +17,7 @@ exports.handler = async (event) => {
     await closeDbConnection();
     return success(items);
   } catch (err) {
-    console.error('Erro ao listar kanban_items:', err);
+    console.error('Erro ao listar kanban_items (saas):', err);
     try { await closeDbConnection(); } catch {}
     return error(err.message || 'Erro interno ao listar kanban_items', 500);
   }

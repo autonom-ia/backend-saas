@@ -99,20 +99,6 @@ functions:
           method: post
           cors: true
 
-  listKanbanItems:
-    handler: handlers/list-kanban-items.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
-    events:
-      - http:
-          path: Autonomia/Funnel/KanbanItems
-          method: get
-          cors: true
-          request:
-            parameters:
-              querystrings:
-                accountId: false
-
   getKanbanItem:
     handler: handlers/get-kanban-item.handler
     layers:

@@ -221,18 +221,73 @@ async function provisionChatwoot(domain) {
     throw new Error('Parâmetros chatwoot-url e/ou chatwoot-token não configurados para a conta');
   }
 
-  // Para endpoints que contenham "/platform" usar api_access_token fixo informado
-  const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: 'h5Gj43DZYb5HnY75gpGwUE3T' } });
-  const mask = (v) => {
-    try { const s = String(v || ''); if (s.length <= 8) return '****'; return `${s.slice(0,4)}****${s.slice(-4)}`; } catch { return '****'; }
-  };
-  console.log('[Chatwoot] Provision start', { domain, url: chatwootUrl, tokenPreview: mask(chatwootToken) });
+  // Token de plataforma para endpoints "/platform" (prioriza parâmetro da conta)
+  const platformTokenRaw = (
+    params['chatwoot-platform-token'] ||
+    params['CHATWOOT_PLATFORM_TOKEN'] ||
+    process.env.CHATWOOT_PLATFORM_TOKEN ||
+    'h5Gj43DZYb5HnY75gpGwUE3T'
+  );
+  const platformToken = String(platformTokenRaw).replace(/[\r\n\t\v\f]/g, '').trim();
+  if (platformToken !== platformTokenRaw) {
+    console.warn('[Chatwoot] platform token sanitizado (removidos caracteres de controle)', {
+      domain,
+      beforePreview: mask(platformTokenRaw),
+      afterPreview: mask(platformToken),
+    });
+  }
 
-  // 1) Criar conta
-  const accBody = { name: account.name || account.domain, locale: 'pt_BR' };
-  const { data: accResp } = await cw.post('/platform/api/v1/accounts', accBody);
-  const chatwootAccountId = accResp?.id || accResp?.data?.id;
-  if (!chatwootAccountId) throw new Error('Falha ao criar conta no Chatwoot: ID ausente na resposta');
+  // Para endpoints que contenham "/platform" usar api_access_token obtido
+  const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: platformToken } });
+  // Para endpoints de conta (não plataforma), utilizar chatwootToken da conta
+  const cwAccount = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: String(chatwootToken).trim() } });
+  console.log('[Chatwoot] Provision start', { domain, url: chatwootUrl, tokenPreview: mask(chatwootToken), platformTokenPreview: mask(platformToken) });
+
+  // 1) Reutilizar conta existente se já houver parâmetro chatwoot-account; caso contrário, criar
+  let chatwootAccountId = params['chatwoot-account'] || params['CHATWOOT_ACCOUNT'];
+  if (chatwootAccountId) {
+    try {
+      const path = `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`;
+      // Log detalhado da requisição de verificação (rota não plataforma)
+      console.log('[Chatwoot] Verificando existência de conta (API)', {
+        domain,
+        chatwootAccountId: String(chatwootAccountId).trim(),
+        request: {
+          method: 'GET',
+          url: `${chatwootUrl}${path}`,
+          baseURL: chatwootUrl,
+          path,
+          headers: { api_access_token_preview: mask(chatwootToken) },
+        },
+      });
+      const { status } = await cwAccount.get(path);
+      if (status >= 200 && status < 300) {
+        console.log('[Chatwoot] Reutilizando chatwoot-account existente; pulando etapas de criação', { chatwootAccountId });
+        // Retorna imediatamente sem criar usuário/associações, conforme solicitado
+        return { chatwootAccountId: String(chatwootAccountId).trim(), chatwootToken: String(chatwootToken).trim(), chatwootUrl };
+      }
+    } catch (e) {
+      console.warn('[Chatwoot] chatwoot-account informado mas não encontrado (API). Será criada nova conta.', {
+        chatwootAccountId,
+        error: e?.response?.status || e?.message || String(e),
+        request: {
+          method: 'GET',
+          url: `${chatwootUrl}/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`,
+          baseURL: chatwootUrl,
+          path: `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`,
+          headers: { api_access_token_preview: mask(chatwootToken) },
+        },
+      });
+      chatwootAccountId = undefined;
+    }
+  }
+
+  if (!chatwootAccountId) {
+    const accBody = { name: account.name || account.domain, locale: 'pt_BR' };
+    const { data: accResp } = await cw.post('/platform/api/v1/accounts', accBody);
+    chatwootAccountId = accResp?.id || accResp?.data?.id;
+    if (!chatwootAccountId) throw new Error('Falha ao criar conta no Chatwoot: ID ausente na resposta');
+  }
 
   // upsert em account_parameter: chatwoot-account
   const existingParam = await db('account_parameter').where({ account_id: account.id, name: 'chatwoot-account' }).first();
@@ -320,7 +375,8 @@ async function configureChatwootInbox(domain, instanceName) {
     // seguir sem interromper o fluxo
   }
 
-  // 1) Criar Agent Bot
+  // 1) Obter (ou criar) Agent Bot
+  //    Primeiro tenta reutilizar um existente via SELECT em agent_bots; se não houver, cria via API
   const botBody = {
     name: account.name || account.domain,
     description: 'Agente conversacional',
@@ -330,12 +386,29 @@ async function configureChatwootInbox(domain, instanceName) {
   };
   let botId;
   try {
-    const { data: botResp } = await cw.post(`/api/v1/accounts/${encodeURIComponent(chatwootAccountId)}/agent_bots`, botBody);
-    botId = botResp?.id || botResp?.data?.id;
-    if (!botId) throw new Error('Resposta sem id do Agent Bot');
+    if (!chatwootDb) throw new Error('Conexão Chatwoot DB indisponível para consultar Agent Bot');
+    const botRow = await chatwootDb('agent_bots')
+      .select('id')
+      .where({ account_id: chatwootAccountId })
+      .first();
+    if (botRow?.id) {
+      botId = botRow.id;
+      console.log('[Chatwoot] Agent Bot existente encontrado; reutilizando', { botId, chatwootAccountId });
+    }
   } catch (e) {
-    console.error('[Chatwoot] Falha ao criar Agent Bot', { error: e?.response?.data || e?.message || e });
-    throw e;
+    console.warn('[Chatwoot] Falha ao consultar Agent Bot existente; prosseguindo para criação', { error: e?.message || e });
+  }
+
+  if (!botId) {
+    try {
+      const { data: botResp } = await cw.post(`/api/v1/accounts/${encodeURIComponent(chatwootAccountId)}/agent_bots`, botBody);
+      botId = botResp?.id || botResp?.data?.id;
+      if (!botId) throw new Error('Resposta sem id do Agent Bot');
+      console.log('[Chatwoot] Agent Bot criado', { botId, chatwootAccountId });
+    } catch (e) {
+      console.error('[Chatwoot] Falha ao criar Agent Bot', { error: e?.response?.data || e?.message || e });
+      throw e;
+    }
   }
 
   // 2) Obter inbox id via SELECT no banco do Chatwoot usando a mesma conexão
