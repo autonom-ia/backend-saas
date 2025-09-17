@@ -221,12 +221,25 @@ async function provisionChatwoot(domain) {
     throw new Error('Parâmetros chatwoot-url e/ou chatwoot-token não configurados para a conta');
   }
 
-  // Para endpoints que contenham "/platform" usar api_access_token fixo informado
-  const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: 'h5Gj43DZYb5HnY75gpGwUE3T' } });
-  const mask = (v) => {
-    try { const s = String(v || ''); if (s.length <= 8) return '****'; return `${s.slice(0,4)}****${s.slice(-4)}`; } catch { return '****'; }
-  };
-  console.log('[Chatwoot] Provision start', { domain, url: chatwootUrl, tokenPreview: mask(chatwootToken) });
+  // Token de plataforma para endpoints "/platform" (prioriza parâmetro da conta)
+  const platformTokenRaw = (
+    params['chatwoot-platform-token'] ||
+    params['CHATWOOT_PLATFORM_TOKEN'] ||
+    process.env.CHATWOOT_PLATFORM_TOKEN ||
+    'h5Gj43DZYb5HnY75gpGwUE3T'
+  );
+  const platformToken = String(platformTokenRaw).replace(/[\r\n\t\v\f]/g, '').trim();
+  if (platformToken !== platformTokenRaw) {
+    console.warn('[Chatwoot] platform token sanitizado (removidos caracteres de controle)', {
+      domain,
+      beforePreview: mask(platformTokenRaw),
+      afterPreview: mask(platformToken),
+    });
+  }
+
+  // Para endpoints que contenham "/platform" usar api_access_token obtido
+  const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: platformToken } });
+  console.log('[Chatwoot] Provision start', { domain, url: chatwootUrl, tokenPreview: mask(chatwootToken), platformTokenPreview: mask(platformToken) });
 
   // 1) Criar conta
   const accBody = { name: account.name || account.domain, locale: 'pt_BR' };

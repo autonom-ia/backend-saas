@@ -1,7 +1,7 @@
 /**
  * SAAS handler para listar itens do Kanban (proxy para serviço do módulo funnel)
  */
-const { listKanbanItems } = require('../../funnel/services/kanban-items-service');
+const { listKanbanItems } = require('../services/kanban-items-service');
 const { success, error } = require('../utils/response');
 const { closeDbConnection } = require('../utils/database');
 
