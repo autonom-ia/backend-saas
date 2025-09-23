@@ -146,4 +146,13 @@ functions:
                 domain: true
                 instance: true
           authorizer: ${self:custom.authorizer}
-
+  resendUnprocessed:
+    handler: handlers/resend-unprocessed.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Evolution/ResendUnprocessed
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
