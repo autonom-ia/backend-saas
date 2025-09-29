@@ -118,6 +118,65 @@ functions:
                 limit: false
                 offset: false
   
+  listContacts:
+    handler: handlers/list-contacts.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/ListContacts
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+                phone: false
+                limit: false
+                offset: false
+
+  createContact:
+    handler: handlers/create-contact.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/CreateContact
+          method: post
+          cors: true
+
+  updateContact:
+    handler: handlers/update-contact.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/UpdateContact
+          method: post
+          cors: true
+
+  processContactCart:
+    handler: handlers/process-contact-cart.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    # Override provider VPC: run this function outside VPC to allow public egress
+    vpc: null
+    events:
+      - http:
+          path: Autonomia/Settings/ProcessContactCart
+          method: post
+          cors: true
+
+  getContactByExternalCode:
+    handler: handlers/get-contact-by-external-code.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/GetContactByExternalCode
+          method: post
+          cors: true
+  
 package:
   individually: true
   patterns:

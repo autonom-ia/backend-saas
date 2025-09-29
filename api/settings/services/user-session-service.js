@@ -56,6 +56,8 @@ const createUserSession = async (sessionData) => {
       phone: sessionData.phone,
       account_id: sessionData.account_id,
       product_id: sessionData.product_id,
+      // optional link to contact
+      contact_id: sessionData.contact_id || null,
       created_at: new Date()
       // A tabela user_session não possui o campo updated_at
     };

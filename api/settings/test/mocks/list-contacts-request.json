@@ -1,0 +1,11 @@
+{
+  "resource": "/Autonomia/Settings/ListContacts",
+  "path": "/Autonomia/Settings/ListContacts",
+  "httpMethod": "GET",
+  "queryStringParameters": {
+    "accountId": "11111111-1111-1111-1111-111111111111",
+    "phone": "+5531999999999",
+    "limit": "10",
+    "offset": "0"
+  }
+}

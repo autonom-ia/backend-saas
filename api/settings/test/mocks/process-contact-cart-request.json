@@ -1,0 +1,6 @@
+{
+  "resource": "/Autonomia/Settings/ProcessContactCart",
+  "path": "/Autonomia/Settings/ProcessContactCart",
+  "httpMethod": "POST",
+  "body": "{\n  \"cpf\": \"12345678900\",\n  \"name\": \"João da Silva\",\n  \"zipcode\": \"30140071\",\n  \"phone\": \"+5531999999999\",\n  \"product\": \"Galaxy S24\",\n  \"account_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"callback_url\": \"https://example.com/callback\"\n}"
+}
