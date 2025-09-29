@@ -1,3 +1,3 @@
 {
-  "body": "{\"account_id\": \"3559a235-c497-4086-afd8-6f04c6f537d6\", \"phone\": \"5531999887766\", \"name\": \"Usuario de Teste\", \"product_id\": \"83678adb-39c4-444c-bfb3-d8955aab5d47\", \"conversation_funnel_step_id\": \"aa0126a9-4311-440a-b269-57599917e99c\", \"message_time\": 1720018800}"
+  "body": "{\"account_id\": \"3559a235-c497-4086-afd8-6f04c6f537d6\", \"phone\": \"5531999887766\", \"name\": \"Usuario de Teste\", \"product_id\": \"83678adb-39c4-444c-bfb3-d8955aab5d47\", \"conversation_funnel_step_id\": \"aa0126a9-4311-440a-b269-57599917e99c\", \"message_time\": 1720018800, \"contact_id\": \"00000000-0000-0000-0000-000000000000\"}"
 }

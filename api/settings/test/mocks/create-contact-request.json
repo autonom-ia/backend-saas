@@ -1,0 +1,6 @@
+{
+  "resource": "/Autonomia/Settings/CreateContact",
+  "path": "/Autonomia/Settings/CreateContact",
+  "httpMethod": "POST",
+  "body": "{\n  \"name\": \"Maria da Silva\",\n  \"account_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"phone\": \"+5531988887777\",\n  \"contact_data\": { \"tags\": [\"vip\"] },\n  \"campaign_id\": null\n}"
+}
