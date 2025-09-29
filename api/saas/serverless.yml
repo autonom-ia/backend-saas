@@ -146,6 +146,68 @@ functions:
                 productId: true
           authorizer: ${self:custom.authorizer}
 
+  # Knowledge Documents
+  listKnowledgeDocuments:
+    handler: handlers/list-knowledge-documents.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: false
+          authorizer: ${self:custom.authorizer}
+
+  getKnowledgeDocument:
+    handler: handlers/get-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+
+  createKnowledgeDocument:
+    handler: handlers/create-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateKnowledgeDocument:
+    handler: handlers/update-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteKnowledgeDocument:
+    handler: handlers/delete-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+
   listAccounts:
     handler: handlers/list-accounts.handler
     events:
