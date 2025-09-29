@@ -1,0 +1,6 @@
+{
+  "resource": "/Autonomia/Settings/UpdateContact",
+  "path": "/Autonomia/Settings/UpdateContact",
+  "httpMethod": "POST",
+  "body": "{\n  \"id\": \"00000000-0000-0000-0000-000000000000\",\n  \"name\": \"Maria Atualizada\",\n  \"phone\": \"+5531977776666\",\n  \"contact_data\": { \"status\": \"active\" }\n}"
+}
