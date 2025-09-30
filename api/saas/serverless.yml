@@ -233,6 +233,21 @@ functions:
           authorizer: ${self:custom.authorizer}
     vpc: null
 
+  # Sync Knowledge Document with external RAG processor
+  syncKnowledgeDocument:
+    handler: handlers/sync-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}/sync
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+    vpc: null
+
   listAccounts:
     handler: handlers/list-accounts.handler
     events:
