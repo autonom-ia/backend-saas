@@ -67,6 +67,7 @@ exports.handler = async (event) => {
       file_extension: doc.file_extension || null,
       raq_name: ragName,
       IdToken: idToken,
+      operation: 'create',
     };
 
     const targetUrl = 'https://auto.autonomia.site/webhook/processing-rag';
