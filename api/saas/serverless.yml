@@ -216,6 +216,7 @@ functions:
               paths:
                 documentId: true
           authorizer: ${self:custom.authorizer}
+    vpc: null
 
   # Sync Knowledge Document with external RAG processor
   syncKnowledgeDocument:
