@@ -67,6 +67,8 @@ provider:
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
     CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
+    KNOWLEDGE_BUCKET: ${ssm:/autonomia/${self:provider.stage}/knowledge/bucket, 'autonomia-knowledge-docs'}
+    KNOWLEDGE_PUBLIC_BASE: ${ssm:/autonomia/${self:provider.stage}/knowledge/public-base, 'https://autonomia-knowledge-docs.s3.amazonaws.com'}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -86,6 +88,12 @@ provider:
       Action:
         - elasticache:*
       Resource: "*"
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:PutObjectAcl
+      Resource:
+        - arn:aws:s3:::${ssm:/autonomia/${self:provider.stage}/knowledge/bucket, 'autonomia-knowledge-docs'}/*
 
 functions:
   listProducts:
@@ -144,6 +152,85 @@ functions:
               paths:
                 productId: true
           authorizer: ${self:custom.authorizer}
+
+  # Knowledge Documents
+  listKnowledgeDocuments:
+    handler: handlers/list-knowledge-documents.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: false
+          authorizer: ${self:custom.authorizer}
+
+  getKnowledgeDocument:
+    handler: handlers/get-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+
+  createKnowledgeDocument:
+    handler: handlers/create-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+    vpc: null
+
+  updateKnowledgeDocument:
+    handler: handlers/update-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteKnowledgeDocument:
+    handler: handlers/delete-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+    vpc: null
+
+  # Sync Knowledge Document with external RAG processor
+  syncKnowledgeDocument:
+    handler: handlers/sync-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}/sync
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+    vpc: null
 
   listAccounts:
     handler: handlers/list-accounts.handler
