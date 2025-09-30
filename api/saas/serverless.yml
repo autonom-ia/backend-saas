@@ -67,6 +67,8 @@ provider:
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
     CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
+    KNOWLEDGE_BUCKET: ${ssm:/autonomia/${self:provider.stage}/knowledge/bucket, 'autonomia-knowledge-docs'}
+    KNOWLEDGE_PUBLIC_BASE: ${ssm:/autonomia/${self:provider.stage}/knowledge/public-base, 'https://autonomia-knowledge-docs.s3.amazonaws.com'}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -86,6 +88,12 @@ provider:
       Action:
         - elasticache:*
       Resource: "*"
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:PutObjectAcl
+      Resource:
+        - arn:aws:s3:::${ssm:/autonomia/${self:provider.stage}/knowledge/bucket, 'autonomia-knowledge-docs'}/*
 
 functions:
   listProducts:
@@ -180,6 +188,7 @@ functions:
           method: post
           cors: true
           authorizer: ${self:custom.authorizer}
+    vpc: null
 
   updateKnowledgeDocument:
     handler: handlers/update-knowledge-document.handler
@@ -206,6 +215,21 @@ functions:
               paths:
                 documentId: true
           authorizer: ${self:custom.authorizer}
+
+  # Sync Knowledge Document with external RAG processor
+  syncKnowledgeDocument:
+    handler: handlers/sync-knowledge-document.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KnowledgeDocuments/{documentId}/sync
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                documentId: true
+          authorizer: ${self:custom.authorizer}
+    vpc: null
 
   listAccounts:
     handler: handlers/list-accounts.handler

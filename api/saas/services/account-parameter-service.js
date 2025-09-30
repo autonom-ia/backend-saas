@@ -13,6 +13,21 @@ const getAllAccountParameters = async (accountId) => {
 };
 
 /**
+ * Busca o valor de um parâmetro específico por name dentro de uma account
+ * @param {string} accountId
+ * @param {string} name
+ */
+const getAccountParameterByName = async (accountId, name) => {
+  const knex = getDbConnection();
+  const row = await knex('account_parameter')
+    .select('*')
+    .where({ account_id: accountId, name })
+    .orderBy('created_at', 'desc')
+    .first();
+  return row || null;
+};
+
+/**
  * Busca um parâmetro por ID
  * @param {string} id
  */
@@ -71,6 +86,7 @@ const deleteAccountParameter = async (id) => {
 
 module.exports = {
   getAllAccountParameters,
+  getAccountParameterByName,
   getAccountParameterById,
   createAccountParameter,
   updateAccountParameter,

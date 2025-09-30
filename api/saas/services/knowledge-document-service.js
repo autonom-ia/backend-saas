@@ -25,6 +25,7 @@ async function listKnowledgeDocuments(params = {}) {
       'kd.updated_at',
       knex.raw('a.name as account_name')
     )
+    .where({ 'kd.deleted': false })
     .orderBy('kd.created_at', 'desc');
 
   if (params.accountId) {
@@ -41,7 +42,7 @@ async function getKnowledgeDocument(id) {
   const knex = getDbConnection();
   const row = await knex('knowledge_document as kd')
     .leftJoin('account as a', 'a.id', 'kd.account_id')
-    .where('kd.id', id)
+    .where({ 'kd.id': id, 'kd.deleted': false })
     .first(
       'kd.id',
       'kd.filename',
@@ -114,7 +115,35 @@ async function updateKnowledgeDocument(id, payload) {
  */
 async function deleteKnowledgeDocument(id) {
   const knex = getDbConnection();
-  await knex('knowledge_document').where({ id }).del();
+  // Fetch document
+  const doc = await knex('knowledge_document').where({ id }).first();
+  if (!doc) return { success: true };
+
+  // Attempt S3 deletion if URL provided
+  try {
+    if (doc.document_url) {
+      const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+      const bucket = process.env.KNOWLEDGE_BUCKET;
+      if (bucket) {
+        // Derive key from URL by removing public base
+        const base = (process.env.KNOWLEDGE_PUBLIC_BASE || `https://${bucket}.s3.amazonaws.com`).replace(/\/?$/, '/');
+        let key = doc.document_url.startsWith(base) ? doc.document_url.substring(base.length) : null;
+        // Fallback: try to strip bucket host prefix
+        if (!key && doc.document_url.includes(`://${bucket}.s3.`)) {
+          key = doc.document_url.split(`/${bucket}/`).pop();
+        }
+        if (key) {
+          const s3 = new S3Client({});
+          await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Falha ao excluir objeto S3 (soft delete prossegue):', e?.message || e);
+  }
+
+  // Soft delete
+  await knex('knowledge_document').where({ id }).update({ deleted: true, updated_at: knex.fn.now() });
   return { success: true };
 }
 
