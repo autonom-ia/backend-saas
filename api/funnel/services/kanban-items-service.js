@@ -13,7 +13,9 @@ const updatableFields = [
   'summary',
   'title',
   'timer_started_at',
-  'timer_duration'
+  'timer_duration',
+  'priority',
+  'conversation_funnel_register_id'
 ];
 
 /**
@@ -37,6 +39,7 @@ const listKanbanItems = async (params = {}) => {
       db.raw('a.name as account_name'),
       db.raw('f.name as funnel_name'),
       db.raw('s.name as funnel_stage_name'),
+      db.raw('s.kanban_code as funnel_stage_kanban_code'),
       db.raw('us.name as user_session_name')
     )
     .orderBy([{ column: 'ki.position', order: 'asc' }, { column: 'ki.created_at', order: 'asc' }])
