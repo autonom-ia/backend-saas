@@ -67,6 +67,7 @@ provider:
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
     CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
+    N8N_WEBHOOK_URL: ${ssm:/autonomia/${self:provider.stage}/n8n/webhook-url, 'https://auto.autonomia.site/workflow/AEuLu99AOhpofmhJ'}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -582,3 +583,74 @@ functions:
               querystrings:
                 accountId: false
           authorizer: ${self:custom.authorizer}
+
+  # Campaign Contact Import System
+  uploadCampaignContacts:
+    handler: handlers/upload-campaign-contacts.handler
+    timeout: 60
+    events:
+      - http:
+          path: Autonomia/Saas/Campaigns/{campaignId}/contacts/upload
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                campaignId: true
+          authorizer: ${self:custom.authorizer}
+
+  listCampaignContacts:
+    handler: handlers/list-campaign-contacts.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Campaigns/{campaignId}/contacts
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                campaignId: true
+              querystrings:
+                status: false
+                limit: false
+                offset: false
+          authorizer: ${self:custom.authorizer}
+
+  updateContactStatus:
+    handler: handlers/update-contact-status.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Contacts/{contactId}/status
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                contactId: true
+          authorizer: ${self:custom.authorizer}
+
+  sendCampaignMessages:
+    handler: handlers/send-campaign-messages.handler
+    timeout: 60
+    events:
+      - http:
+          path: Autonomia/Saas/Campaigns/{campaignId}/send
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                campaignId: true
+              querystrings:
+                status: false
+                limit: false
+          authorizer: ${self:custom.authorizer}
+
+  n8nWebhook:
+    handler: handlers/n8n-webhook.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Webhooks/n8n
+          method: post
+          cors: true
+          # Note: No authorizer for webhook endpoint
