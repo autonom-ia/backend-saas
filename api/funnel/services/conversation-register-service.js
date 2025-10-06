@@ -2,7 +2,6 @@
  * Serviço para operações com registros de conversas de funil
  */
 const { getDbConnection } = require('../utils/database');
-const { getCache, setCache, invalidateCache } = require('../utils/cache');
 const { createKanbanItem, updateKanbanItem } = require('./kanban-items-service');
 
 /**
@@ -75,11 +74,7 @@ const createConversationFunnelRegister = async (registerData) => {
         console.error(`Erro ao atualizar user_session ${registerData.user_session_id}:`, updateError);
       }
     }
-    // Invalidar cache se necessário (opcional, dependendo da lógica de negócio)
-    if (registerData.account_id) {
-      const cacheKey = `account-funnel:${registerData.account_id}`;
-      await invalidateCache(cacheKey);
-    }
+    // Cache removido para evitar dependência de VPC/Redis nesta rota
 
     // Criar/Atualizar item no kanban para a user_session
     if (registerData.user_session_id) {
@@ -89,6 +84,21 @@ const createConversationFunnelRegister = async (registerData) => {
         const summary = registerData.summary || null;
         const priority = registerData.priority || null;
         const funnelStageId = registerData.conversation_funnel_step_id || null;
+        // Obter o nome/telefone da user_session para usar como título do Kanban
+        let userSessionName = null;
+        let userSessionPhone = null;
+        try {
+          if (userSessionId) {
+            const usRow = await db('user_session')
+              .select('name', 'phone')
+              .where('id', userSessionId)
+              .first();
+            userSessionName = (usRow && usRow.name) ? usRow.name : null;
+            userSessionPhone = (usRow && usRow.phone) ? usRow.phone : null;
+          }
+        } catch (e) {
+          console.warn('Não foi possível obter name da user_session para título do Kanban:', e?.message || e);
+        }
 
         // Buscar funnel_id via conversation_funnel_step se informado
         let funnelId = null;
@@ -135,7 +145,7 @@ const createConversationFunnelRegister = async (registerData) => {
             user_session_id: userSessionId,
             position: 0,
             summary,
-            title: summary || 'Kanban Item',
+            title: userSessionName || userSessionPhone || 'Kanban Item',
             timer_started_at: now,
             priority,
             conversation_funnel_register_id: createdRegister.id,
@@ -162,16 +172,42 @@ const createConversationFunnelRegister = async (registerData) => {
           .first();
         if (step && step.assign_to_team) {
           // Obter dados necessários a partir da user_session
-          const us = await db('user_session')
-            .select('account_id', 'contact_id', 'inbox_id', 'conversation_id')
+          let us = await db('user_session')
+            .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
             .where('id', registerData.user_session_id)
             .first();
-          if (us && us.account_id && us.contact_id && us.inbox_id && us.conversation_id) {
+
+          // Backfill inbox_id / conversation_id a partir do body se ausentes e persistir
+          const updates = {};
+          if (!us?.inbox_id && registerData.chatwoot_inbox) {
+            const parsedInbox = parseInt(registerData.chatwoot_inbox, 10);
+            if (!Number.isNaN(parsedInbox)) updates.inbox_id = parsedInbox;
+          }
+          if (!us?.conversation_id && registerData.chatwoot_conversations) {
+            const parsedConv = parseInt(registerData.chatwoot_conversations, 10);
+            if (!Number.isNaN(parsedConv)) updates.conversation_id = parsedConv;
+          }
+          if (Object.keys(updates).length > 0) {
+            await db('user_session').where('id', us.id).update(updates);
+            // Recarregar us com valores atualizados
+            us = await db('user_session')
+              .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
+              .where('id', registerData.user_session_id)
+              .first();
+          }
+
+          // Montar payload priorizando valores do body quando presentes
+          const accountId = registerData.chatwoot_account;
+          const inboxId = registerData.chatwoot_inbox;
+          const conversationId = registerData.chatwoot_conversations;
+          const contactId = registerData.chatwoot_contact;
+
+          if (accountId && contactId && inboxId && conversationId) {
             const payload = {
-              accountId: us.account_id,
-              contactId: us.contact_id,
-              inboxId: us.inbox_id,
-              conversationId: us.conversation_id,
+              accountId,
+              contactId,
+              inboxId,
+              conversationId,
             };
             const url = 'https://api-clients.autonomia.site/Autonomia/Clients/AssignContacts';
             try {
@@ -184,13 +220,18 @@ const createConversationFunnelRegister = async (registerData) => {
                 const text = await resp.text();
                 console.error('AssignContacts falhou', resp.status, text);
               } else {
-                console.log('AssignContacts chamado com sucesso para conversation', us.conversation_id);
+                console.log('AssignContacts chamado com sucesso para conversation', conversationId);
               }
             } catch (httpErr) {
               console.error('Erro HTTP ao chamar AssignContacts:', httpErr);
             }
           } else {
-            console.warn('Dados insuficientes em user_session para AssignContacts', us);
+            console.warn('Dados insuficientes para AssignContacts', {
+              accountId,
+              contactId,
+              inboxId,
+              conversationId,
+            });
           }
         }
       }

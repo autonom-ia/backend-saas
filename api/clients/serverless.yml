@@ -136,6 +136,16 @@ functions:
           method: post
           cors: true
 
+  getMessages:
+    handler: handlers/get-messages.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Clients/GetMessages
+          method: post
+          cors: true
+
   getLoggedUsers:
     handler: handlers/get-logged-users.handler
     layers:
