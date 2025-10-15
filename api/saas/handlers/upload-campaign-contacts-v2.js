@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const Busboy = require('busboy');
 const { 
   getCampaignById, 
   processContactFile, 
@@ -30,7 +31,69 @@ const isValidFileType = (filename, mimetype) => {
 };
 
 /**
- * Handler para upload de contatos de campanha
+ * Parse multipart usando Busboy
+ * @param {Object} event - Evento do Lambda
+ * @returns {Promise<Object>} Dados parseados
+ */
+const parseMultipartWithBusboy = (event) => {
+  return new Promise((resolve, reject) => {
+    const result = {};
+    const contentType = event.headers['content-type'] || event.headers['Content-Type'];
+    
+    if (!contentType || !contentType.includes('multipart/form-data')) {
+      reject(new Error('Content-Type deve ser multipart/form-data'));
+      return;
+    }
+
+    const busboy = Busboy({ 
+      headers: { 'content-type': contentType },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+        files: 1
+      }
+    });
+
+    busboy.on('file', (fieldname, file, info) => {
+      const { filename, mimeType } = info;
+      console.log(`Arquivo recebido: ${filename}, tipo: ${mimeType}`);
+      
+      const chunks = [];
+      
+      file.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      
+      file.on('end', () => {
+        const content = Buffer.concat(chunks);
+        result[fieldname] = {
+          filename,
+          mimetype: mimeType,
+          content
+        };
+      });
+    });
+
+    busboy.on('field', (fieldname, value) => {
+      result[fieldname] = value;
+    });
+
+    busboy.on('finish', () => {
+      resolve(result);
+    });
+
+    busboy.on('error', (error) => {
+      reject(error);
+    });
+
+    // Converter body para Buffer se necessário
+    const bodyBuffer = Buffer.isBuffer(event.body) ? event.body : Buffer.from(event.body, 'binary');
+    busboy.write(bodyBuffer);
+    busboy.end();
+  });
+};
+
+/**
+ * Handler para upload de contatos de campanha usando Busboy
  */
 const uploadContactsHandler = withCors(async (event, context) => {
   try {
@@ -46,29 +109,18 @@ const uploadContactsHandler = withCors(async (event, context) => {
     console.log('Headers recebidos:', event.headers);
     console.log('Content-Type:', event.headers['content-type'] || event.headers['Content-Type']);
 
-    // Parse do body multipart/form-data
-    const body = event.body;
-    const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
-    const boundary = contentType.split('boundary=')[1];
-    
-    if (!body) {
+    // Parse do body multipart/form-data usando Busboy
+    let formData;
+    try {
+      formData = await parseMultipartWithBusboy(event);
+      console.log('FormData parseado:', Object.keys(formData));
+    } catch (parseError) {
+      console.error('Erro no parsing:', parseError);
       return errorResponse({ 
         success: false, 
-        message: 'Corpo da requisição vazio' 
+        message: `Erro ao processar dados: ${parseError.message}` 
       }, 400, event);
     }
-
-    if (!boundary) {
-      return errorResponse({ 
-        success: false, 
-        message: 'Boundary não encontrado no Content-Type' 
-      }, 400, event);
-    }
-
-    // Extrair dados do form-data
-    const formData = parseMultipartFormData(body, boundary);
-    
-    console.log('FormData parseado:', Object.keys(formData));
     
     if (!formData.file) {
       return errorResponse({ 
@@ -105,6 +157,12 @@ const uploadContactsHandler = withCors(async (event, context) => {
     try {
       // Processar arquivo
       const parsed = await processContactFile(tempFilePath, formData.file.mimetype);
+      
+      console.log('Arquivo processado:', {
+        headers: parsed.headers,
+        mapping: parsed.mapping,
+        totalRows: parsed.data.length
+      });
       
       // Validar e normalizar contatos
       const validatedContacts = [];
@@ -183,104 +241,6 @@ const uploadContactsHandler = withCors(async (event, context) => {
     }, 500, event);
   }
 });
-
-/**
- * Parse robusto de multipart/form-data
- * @param {string} body - Body da requisição
- * @param {string} boundary - Boundary do multipart
- * @returns {Object} Dados parseados
- */
-function parseMultipartFormData(body, boundary) {
-  const result = {};
-  
-  try {
-    // Converter body para Buffer se for string
-    const bodyBuffer = Buffer.isBuffer(body) ? body : Buffer.from(body, 'binary');
-    
-    // Dividir por boundary
-    const boundaryBuffer = Buffer.from(`--${boundary}`);
-    const parts = [];
-    let start = 0;
-    
-    while (true) {
-      const boundaryIndex = bodyBuffer.indexOf(boundaryBuffer, start);
-      if (boundaryIndex === -1) break;
-      
-      if (start > 0) {
-        parts.push(bodyBuffer.slice(start, boundaryIndex));
-      }
-      
-      start = boundaryIndex + boundaryBuffer.length;
-    }
-    
-    for (const part of parts) {
-      const partStr = part.toString('binary');
-      
-      if (partStr.includes('Content-Disposition')) {
-        const lines = partStr.split('\r\n');
-        const dispositionLine = lines.find(line => line.includes('Content-Disposition'));
-        
-        if (dispositionLine) {
-          const nameMatch = dispositionLine.match(/name="([^"]+)"/);
-          const filenameMatch = dispositionLine.match(/filename="([^"]+)"/);
-          
-          if (nameMatch) {
-            const fieldName = nameMatch[1];
-            
-            if (filenameMatch) {
-              // É um arquivo
-              const filename = filenameMatch[1];
-              const contentTypeIndex = lines.findIndex(line => line.includes('Content-Type'));
-              let mimetype = 'application/octet-stream';
-              
-              if (contentTypeIndex >= 0) {
-                mimetype = lines[contentTypeIndex].split(':')[1].trim();
-              } else if (filename.toLowerCase().endsWith('.csv')) {
-                mimetype = 'text/csv';
-              } else if (filename.toLowerCase().endsWith('.xlsx')) {
-                mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-              }
-              
-              const emptyLineIndex = lines.findIndex(line => line === '');
-              if (emptyLineIndex >= 0) {
-                const contentLines = lines.slice(emptyLineIndex + 1);
-                // Remover última linha vazia se existir
-                if (contentLines[contentLines.length - 1] === '') {
-                  contentLines.pop();
-                }
-                const contentStr = contentLines.join('\r\n');
-                const content = Buffer.from(contentStr, 'binary');
-                
-                result[fieldName] = {
-                  filename,
-                  mimetype,
-                  content
-                };
-              }
-            } else {
-              // É um campo de texto
-              const emptyLineIndex = lines.findIndex(line => line === '');
-              if (emptyLineIndex >= 0) {
-                const value = lines.slice(emptyLineIndex + 1).join('\r\n').trim();
-                result[fieldName] = value;
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    console.log('Parsing resultado:', Object.keys(result));
-    if (result.file) {
-      console.log('Arquivo encontrado:', result.file.filename, result.file.mimetype, 'Tamanho:', result.file.content.length);
-    }
-    
-  } catch (error) {
-    console.error('Erro no parsing multipart:', error);
-  }
-  
-  return result;
-}
 
 module.exports = {
   handler: uploadContactsHandler

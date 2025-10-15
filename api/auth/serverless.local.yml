@@ -1,0 +1,65 @@
+service: autonomia-api-auth-local
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3003
+    host: 0.0.0.0
+    noPrependStageInUrl: true
+    lambdaPort: 3005
+    websocketPort: 3006
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: local
+  region: us-east-1
+  environment:
+    NODE_ENV: development
+    MOCK_AUTH: true
+    AWS_REGION: us-east-1
+
+functions:
+  login:
+    handler: handlers/login.handler
+    events:
+      - http:
+          path: /login
+          method: post
+          cors: true
+
+  register:
+    handler: handlers/register.handler
+    events:
+      - http:
+          path: /register
+          method: post
+          cors: true
+
+  confirm:
+    handler: handlers/confirm.handler
+    events:
+      - http:
+          path: /confirm
+          method: post
+          cors: true
+
+  forgotPassword:
+    handler: handlers/forgotPassword.handler
+    events:
+      - http:
+          path: /forgot-password
+          method: post
+          cors: true
+
+  resetPassword:
+    handler: handlers/resetPassword.handler
+    events:
+      - http:
+          path: /reset-password
+          method: post
+          cors: true

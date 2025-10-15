@@ -17,6 +17,7 @@ out/
 .serverless/
 .webpack/
 .migrations-package/
+.serverless.local.yml
 
 # Logs
 logs/

@@ -1,0 +1,44 @@
+{
+  "development": {
+    "api": {
+      "saas": {
+        "baseURL": "http://localhost:3001",
+        "endpoints": {
+          "products": "/Autonomia/Saas/Products",
+          "accounts": "/Autonomia/Saas/Accounts",
+          "campaigns": "/Autonomia/Saas/Campaigns",
+          "contacts": "/Autonomia/Saas/Contacts",
+          "knowledgeDocuments": "/Autonomia/Saas/KnowledgeDocuments"
+        }
+      },
+      "auth": {
+        "baseURL": "http://localhost:3004",
+        "endpoints": {
+          "login": "/login",
+          "register": "/register",
+          "confirm": "/confirm",
+          "forgotPassword": "/forgot-password",
+          "resetPassword": "/reset-password"
+        }
+      }
+    },
+    "headers": {
+      "development": {
+        "X-Dev-Email": "adfelipevs@gmail.com"
+      }
+    },
+    "cors": {
+      "origin": "http://localhost:3000"
+    }
+  },
+  "production": {
+    "api": {
+      "saas": {
+        "baseURL": "https://api-saas.autonomia.site"
+      },
+      "auth": {
+        "baseURL": "https://api-auth.autonomia.site"
+      }
+    }
+  }
+}

@@ -1,10 +1,5 @@
 // Shared CORS utilities for API Gateway Lambda handlers (saas)
-const allowedLocalOrigins = new Set([
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-]);
+const allowedLocalOrigins = new Set([]);
 
 function isAllowedAutonomiaOrigin(origin) {
   try {
@@ -27,7 +22,7 @@ function isAllowedOrigin(origin) {
 function buildCorsHeaders(origin) {
   const base = {
     'Access-Control-Allow-Credentials': true,
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,X-Dev-Email',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'Vary': 'Origin',
   };

@@ -5,7 +5,10 @@
   "scripts": {
     "deploy": "serverless deploy --stage prod"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.840.0",
+    "serverless-offline": "^13.3.0"
+  },
   "devDependencies": {
     "serverless": "^3.35.2",
     "serverless-domain-manager": "^7.3.7"
