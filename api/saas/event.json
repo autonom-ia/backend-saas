@@ -1,0 +1,15 @@
+{
+  "httpMethod": "GET",
+  "headers": {
+    "origin": "http://localhost:3000"
+  },
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "email": "adfelipevs@gmail.com"
+        }
+      }
+    }
+  }
+}

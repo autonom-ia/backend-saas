@@ -8,9 +8,13 @@
     "deploy:prod": "serverless deploy --stage prod",
     "create:domain": "serverless create_domain --stage prod"
   },
-  "dependencies": {},
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "js-yaml": "^4.1.0"
+  },
   "devDependencies": {
     "serverless": "^3.35.2",
-    "serverless-domain-manager": "^8.0.0"
+    "serverless-domain-manager": "^8.0.0",
+    "serverless-offline": "^13.3.0"
   }
 }

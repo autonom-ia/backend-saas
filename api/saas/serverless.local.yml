@@ -1,0 +1,176 @@
+service: autonomia-api-saas-local
+frameworkVersion: '3'
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3001
+    lambdaPort: 3009
+    host: 0.0.0.0
+    noPrependStageInUrl: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: local
+  region: us-east-1
+  
+  environment:
+    DEV_DEFAULT_EMAIL: adfelipevs@gmail.com
+    NODE_ENV: development
+    DB_HOST: localhost
+    DB_PORT: 5432
+    DB_NAME: autonomia_db
+    DB_USER: autonomia_admin
+    DB_PASSWORD: autonomia123
+    DB_SSL_ENABLED: false
+    REDIS_HOST: localhost
+    REDIS_PORT: 6379
+    CACHE_TTL: 300
+    N8N_WEBHOOK_URL: http://localhost:5678/webhook/test
+    KNOWLEDGE_BUCKET: autonomia-knowledge-docs-local
+    KNOWLEDGE_PUBLIC_BASE: http://localhost:9000/knowledge
+
+functions:
+  listProducts:
+    handler: handlers/list-products.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products
+          method: get
+          cors: true
+          
+  getProduct:
+    handler: handlers/get-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products/{productId}
+          method: get
+          cors: true
+          
+  createProduct:
+    handler: handlers/create-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products
+          method: post
+          cors: true
+          
+  updateProduct:
+    handler: handlers/update-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products/{productId}
+          method: put
+          cors: true
+          
+  deleteProduct:
+    handler: handlers/delete-product.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products/{productId}
+          method: delete
+          cors: true
+
+  # Accounts endpoints
+  listAccounts:
+    handler: handlers/list-accounts.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts
+          method: get
+          cors: true
+          
+  getAccount:
+    handler: handlers/get-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}
+          method: get
+          cors: true
+          
+  createAccount:
+    handler: handlers/create-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts
+          method: post
+          cors: true
+          
+  updateAccount:
+    handler: handlers/update-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}
+          method: put
+          cors: true
+          
+  deleteAccount:
+    handler: handlers/delete-account.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}
+          method: delete
+          cors: true
+
+  # Campaigns endpoints
+  listCampaigns:
+    handler: handlers/list-campaigns.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Campaigns
+          method: get
+          cors: true
+          
+  createCampaign:
+    handler: handlers/create-campaign.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Campaigns
+          method: post
+          cors: true
+
+  # Template Messages endpoints
+  listTemplateMessages:
+    handler: handlers/list-template-messages.handler
+    events:
+      - http:
+          path: Autonomia/Saas/TemplateMessages
+          method: get
+          cors: true
+          
+  createTemplateMessage:
+    handler: handlers/create-template-message.handler
+    events:
+      - http:
+          path: Autonomia/Saas/TemplateMessages
+          method: post
+          cors: true
+
+  # Contacts endpoints
+  uploadCampaignContacts:
+    handler: handlers/upload-campaign-contacts-v2.handler
+    timeout: 60
+    events:
+      - http:
+          path: Autonomia/Saas/Campaigns/{campaignId}/contacts/upload
+          method: post
+          cors: true
+          
+  listCampaignContacts:
+    handler: handlers/list-campaign-contacts.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Campaigns/{campaignId}/contacts
+          method: get
+          cors: true
+          
+  updateContactStatus:
+    handler: handlers/update-contact-status.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Contacts/{contactId}/status
+          method: put
+          cors: true
