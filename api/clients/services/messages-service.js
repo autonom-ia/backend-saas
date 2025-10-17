@@ -2,31 +2,32 @@
  * Serviço para listar mensagens do Chatwoot
  */
 const knex = require('knex');
+const { getDbConnection } = require('../utils/database');
 
 /**
- * Cria conexão com o banco do Chatwoot usando o prefixo (ex.: "/autonomia/")
+ * Cria conexão com o banco do Chatwoot usando host da tabela account_parameter e credenciais fixas
  */
 async function createChatwootDbConnection(prefix) {
-  const envPrefix = prefix.replace(/^\/|\/$/g, '').split('/')[0].toUpperCase();
-  const hostVarName = `${envPrefix}_CHATWOOT_DB_HOST`;
-  const nameVarName = `${envPrefix}_CHATWOOT_DB_NAME`;
-  const passwordVarName = `${envPrefix}_CHATWOOT_DB_PASSWORD`;
-  const portVarName = `${envPrefix}_CHATWOOT_DB_PORT`;
-  const userVarName = `${envPrefix}_CHATWOOT_DB_USER`;
+  const db = getDbConnection();
+  const normalizedPrefix = String(prefix || '').replace(/^\/+|\/+$/g, '');
 
-  const host = process.env[hostVarName];
-  const name = process.env[nameVarName];
-  const password = process.env[passwordVarName];
-  const port = process.env[portVarName];
-  const user = process.env[userVarName];
+  const prefixParam = await db('account_parameter')
+    .select('account_id')
+    .where({ name: 'prefix-parameter', value: normalizedPrefix })
+    .first();
+  if (!prefixParam) throw new Error(`Conta não encontrada para o prefixo '${normalizedPrefix}'`);
 
-  const missing = [];
-  if (!host) missing.push(hostVarName);
-  if (!name) missing.push(nameVarName);
-  if (!password) missing.push(passwordVarName);
-  if (!port) missing.push(portVarName);
-  if (!user) missing.push(userVarName);
-  if (missing.length) throw new Error(`Variáveis de ambiente ausentes: ${missing.join(', ')}`);
+  const hostParam = await db('account_parameter')
+    .select('value')
+    .where({ account_id: prefixParam.account_id, name: 'chatwoot_db_host' })
+    .first();
+  if (!hostParam || !hostParam.value) throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado`);
+
+  const host = hostParam.value;
+  const port = 5432;
+  const name = 'chatwoot';
+  const user = 'postgres';
+  const password = 'Mfcd62!!Mfcd62!!';
 
   const chatwootDb = knex({
     client: 'pg',

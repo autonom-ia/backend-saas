@@ -65,18 +65,6 @@ provider:
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, 'autonomia-redis.lfxcgb.ng.0001.use1.cache.amazonaws.com'}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
     CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'} # 5 minutos em segundos
-    # Variáveis de ambiente do Chatwoot com prefixo fixo
-    EMPRESTA_CHATWOOT_DB_HOST: ${ssm:/empresta/chatwoot/db/host, ''}
-    EMPRESTA_CHATWOOT_DB_PORT: ${ssm:/empresta/chatwoot/db/port, ''}
-    EMPRESTA_CHATWOOT_DB_NAME: ${ssm:/empresta/chatwoot/db/name, ''}
-    EMPRESTA_CHATWOOT_DB_USER: ${ssm:/empresta/chatwoot/db/user, ''}
-    EMPRESTA_CHATWOOT_DB_PASSWORD: ${ssm:/empresta/chatwoot/db/password, ''}
-    # Variáveis de ambiente do Chatwoot (tenant autonomia)
-    AUTONOMIA_CHATWOOT_DB_HOST: ${ssm:/autonomia/chatwoot/db/host, ''}
-    AUTONOMIA_CHATWOOT_DB_PORT: ${ssm:/autonomia/chatwoot/db/port, ''}
-    AUTONOMIA_CHATWOOT_DB_NAME: ${ssm:/autonomia/chatwoot/db/name, ''}
-    AUTONOMIA_CHATWOOT_DB_USER: ${ssm:/autonomia/chatwoot/db/user, ''}
-    AUTONOMIA_CHATWOOT_DB_PASSWORD: ${ssm:/autonomia/chatwoot/db/password, ''}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -94,8 +82,6 @@ provider:
         - ssm:GetParameters
       Resource: 
         - "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
-        - "arn:aws:ssm:us-east-1:*:parameter/empresta/chatwoot/*"
-        - "arn:aws:ssm:us-east-1:*:parameter/autonomia/chatwoot/*"
     - Effect: Allow
       Action:
         - elasticache:*
