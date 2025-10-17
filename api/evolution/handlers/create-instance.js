@@ -51,53 +51,7 @@ exports.handler = async (event) => {
       return out;
     })();
 
-    // Se o caller já informar um Chatwoot account_id, pular o provisionamento e CONTINUAR o fluxo
-    let chatwootAccountId, chatwootToken, chatwootUrl;
-    if (body.account_id) {
-      chatwootAccountId = String(body.account_id).trim();
-      chatwootUrl = String(body.chatwootUrl || '').trim();
-      chatwootToken = String(body.chatwootToken || '').trim();
-      if (!chatwootUrl || !chatwootToken) {
-        return createResponse(400, { message: 'Para usar account_id, é obrigatório informar chatwootUrl e chatwootToken' }, origin);
-      }
-      console.log('[CreateInstance] account_id informado; pulando provisionamento Chatwoot', { domain, instance: payload.instanceName, account_id: chatwootAccountId });
-
-      // Persistir parâmetros para serem usados por configureChatwootInbox
-      const db = getDbConnection();
-      const account = await db('account').where({ domain }).first();
-      if (!account) {
-        return createResponse(400, { message: `Conta não encontrada para domain: ${domain}` }, origin);
-      }
-      const upsertParam = async (name, value) => {
-        const existing = await db('account_parameter').where({ account_id: account.id, name }).first();
-        if (existing) await db('account_parameter').where({ id: existing.id }).update({ value: String(value) });
-        else await db('account_parameter').insert({ account_id: account.id, name, value: String(value) });
-      };
-      await upsertParam('chatwoot-account', chatwootAccountId);
-      await upsertParam('chatwoot-url', chatwootUrl);
-      await upsertParam('chatwoot-token', chatwootToken);
-    } else {
-      // 1-3) Provisionamento Chatwoot: criar conta, usuário e associar
-      ({ chatwootAccountId, chatwootToken, chatwootUrl } = await provisionChatwoot(domain));
-    }
-
-    // 4) Enriquecer payload com os campos de Chatwoot e flags adicionais
-    Object.assign(payload, {
-      syncFullHistory: false,
-      chatwootAccountId: String(chatwootAccountId),
-      chatwootToken: String(chatwootToken),
-      chatwootUrl: String(chatwootUrl),
-      chatwootSignMsg: false,
-      chatwootReopenConversation: false,
-      chatwootConversationPending: false,
-      chatwootImportContacts: true,
-      chatwootNameInbox: payload.instanceName,
-      chatwootMergeBrazilContacts: false,
-      chatwootImportMessages: false,
-      chatwootDaysLimitImportMessages: 30,
-      autoCreate:true,
-      chatwootOrganization: 'Gerador de QR',
-    });
+    // Não enviar mais parâmetros de Chatwoot nem provisionar/Configurar Chatwoot aqui
 
     // Log sanitizado para auditoria (sem expor token e número completos)
     try {
@@ -149,14 +103,7 @@ exports.handler = async (event) => {
       console.warn('Connect pós-criação falhou, retornando apenas dados de criação', e?.message || e);
     }
 
-    // 5) Configurar Chatwoot: criar Agent Bot, associar à inbox e salvar parâmetro chatwoot-inbox
-    try {
-      const cfg = await configureChatwootInbox(domain, payload.instanceName);
-      enriched = { ...enriched, chatwootAgentBotId: cfg?.botId, chatwootInboxId: cfg?.inboxId };
-      console.log('[CreateInstance] Chatwoot inbox configurada', { instance: payload.instanceName, botId: cfg?.botId, inboxId: cfg?.inboxId });
-    } catch (cfgErr) {
-      console.warn('[CreateInstance] Falha ao configurar Chatwoot (agent bot/inbox). Prosseguindo.', { error: cfgErr?.message || cfgErr });
-    }
+    // Não configurar Chatwoot neste fluxo
 
     return createResponse(201, enriched, origin);
   } catch (err) {
