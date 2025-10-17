@@ -96,6 +96,26 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
       .where('account_id', accountId)
       .select('*');
 
+    // 4.1. Se não existir user_session, criar agora
+    if (!userSessions || userSessions.length === 0) {
+      console.log('Nenhuma user_session encontrada. Criando nova sessão...');
+      const insertData = {
+        account_id: accountId,
+        phone,
+        // opcional: atrelar produto da conta se existir
+        product_id: products && products[0] ? products[0].id : productId || null,
+      };
+      const [createdSession] = await db('user_session')
+        .insert(insertData)
+        .returning('*');
+      if (createdSession) {
+        userSessions = [createdSession];
+        console.log('user_session criada com sucesso:', createdSession.id);
+      } else {
+        console.warn('Falha ao criar user_session. Prosseguindo sem sessão.');
+      }
+    }
+
     // Formatar os parâmetros de array para objeto e colocá-los diretamente na raiz
     const accountParams = formatParameters(accountParameters);
     const productParams = formatParameters(productParameters);

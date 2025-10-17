@@ -14,9 +14,8 @@ function mask(value) {
   }
 }
 
-// ================= Helpers: Chatwoot DB connection via SSM envs (replicates clients service) =================
+// ================= Helpers: Chatwoot DB connection via account_parameter (no SSM) =================
 async function getAccountPrefix(db, accountId) {
-  // Busca o parâmetro "prefix-parameter" para determinar o prefixo de SSM/env
   const row = await db('account_parameter')
     .select('value')
     .where({ account_id: accountId, name: 'prefix-parameter' })
@@ -24,40 +23,54 @@ async function getAccountPrefix(db, accountId) {
   if (!row || !row.value) {
     throw new Error('Parâmetro prefix-parameter não encontrado para a conta');
   }
-  return row.value; // ex: "/autonomia/chatwoot/db" ou "/empresta/chatwoot/db"
+  return row.value;
 }
 
-async function createChatwootDbConnection(prefix) {
+async function createChatwootDbConnection(identifier) {
   try {
-    console.log(`[ChatwootDB] Buscando parâmetros de conexão (prefixo: ${prefix})`);
-    // Ex.: prefix '/autonomia/chatwoot/db' => envPrefix 'AUTONOMIA'
-    const envPrefix = prefix.replace(/^\/|\/$/g, '').split('/')[0].toUpperCase();
-    const hostVarName = `${envPrefix}_CHATWOOT_DB_HOST`;
-    const nameVarName = `${envPrefix}_CHATWOOT_DB_NAME`;
-    const passwordVarName = `${envPrefix}_CHATWOOT_DB_PASSWORD`;
-    const portVarName = `${envPrefix}_CHATWOOT_DB_PORT`;
-    const userVarName = `${envPrefix}_CHATWOOT_DB_USER`;
+    const db = getDbConnection();
+    const raw = String(identifier || '');
+    const isNumeric = /^\d+$/.test(raw);
 
-    const host = process.env[hostVarName];
-    const name = process.env[nameVarName];
-    const password = process.env[passwordVarName];
-    const port = process.env[portVarName];
-    const user = process.env[userVarName];
-
-    const missingEnvVars = [];
-    if (!host) missingEnvVars.push(hostVarName);
-    if (!name) missingEnvVars.push(nameVarName);
-    if (!password) missingEnvVars.push(passwordVarName);
-    if (!port) missingEnvVars.push(portVarName);
-    if (!user) missingEnvVars.push(userVarName);
-    if (missingEnvVars.length > 0) {
-      throw new Error(`Variáveis de ambiente não encontradas: ${missingEnvVars.join(', ')}`);
+    let accountId;
+    if (isNumeric) {
+      accountId = raw;
+    } else {
+      // identifier é um prefixo. Normalizar e localizar a conta correspondente.
+      const normalized = raw.replace(/^\/+|\/+$/g, '');
+      // Tentar match exato
+      let row = await db('account_parameter')
+        .select('account_id')
+        .where({ name: 'prefix-parameter', value: normalized })
+        .first();
+      // Fallback: tentar por prefixo contido (ex.: '/empresta/chatwoot/db')
+      if (!row) {
+        row = await db('account_parameter')
+          .select('account_id')
+          .where('name', 'prefix-parameter')
+          .andWhere('value', 'like', `%${normalized}%`)
+          .first();
+      }
+      if (!row) throw new Error(`Conta não encontrada para o prefixo '${normalized}'`);
+      accountId = row.account_id;
     }
 
-    console.log('[ChatwootDB] Conectando', { host, name, port, user, password: '[REDACTED]' });
+    const hostRow = await db('account_parameter')
+      .select('value')
+      .where({ account_id: accountId, name: 'chatwoot_db_host' })
+      .first();
+    if (!hostRow || !hostRow.value) throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado`);
+
+    const host = hostRow.value;
+    const port = 5432;
+    const user = 'postgres';
+    const database = 'chatwoot';
+    const password = 'Mfcd62!!Mfcd62!!';
+
+    console.log('[ChatwootDB] Conectando', { host, database, port, user, password: '[REDACTED]' });
     const chatwootDb = knex({
       client: 'pg',
-      connection: { host, port, user, password, database: name },
+      connection: { host, port, user, password, database },
       pool: { min: 0, max: 1 },
       acquireConnectionTimeout: 10000,
     });
@@ -349,15 +362,19 @@ async function configureChatwootInbox(domain, instanceName) {
     throw new Error('Parâmetros chatwoot-url, chatwoot-token e/ou chatwoot-account ausentes');
   }
 
-  // Buscar parâmetros do produto para obter agent_webhook
-  let agentWebhook;
+  // Buscar parâmetros do produto para obter n8n_input_webhook (webhook de entrada do Agent)
+  let inputWebhook;
   if (account.product_id) {
     const prodParamsRows = await db('product_parameter')
       .where('product_id', account.product_id)
       .select('name', 'value');
     const pparams = formatParameters(prodParamsRows);
-    agentWebhook = pparams['agent_webhook'] || pparams['agent-webhook'] || pparams['AGENT_WEBHOOK'];
+    inputWebhook =
+      pparams['n8n_input_webhook'] ||
+      pparams['n8n-input-webhook'] ||
+      pparams['N8N_INPUT_WEBHOOK'];
   }
+  const outgoingUrl = inputWebhook || 'https://auto.autonomia.site/webhook/input-follow';
 
   const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: String(chatwootToken).trim() } });
 
@@ -380,7 +397,7 @@ async function configureChatwootInbox(domain, instanceName) {
   const botBody = {
     name: account.name || account.domain,
     description: 'Agente conversacional',
-    outgoing_url: agentWebhook || '',
+    outgoing_url: outgoingUrl,
     bot_type: 0,
     bot_config: {},
   };

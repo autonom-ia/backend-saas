@@ -31,10 +31,17 @@ async function createChatwootDbConnection(prefix) {
     console.log(`Buscando host do Chatwoot para prefixo: ${normalizedPrefix}`);
 
     // Mapear prefixo -> account_id via account_parameter.name = 'prefix-parameter'
-    const prefixParam = await db('account_parameter')
+    let prefixParam = await db('account_parameter')
       .select('account_id')
       .where({ name: 'prefix-parameter', value: normalizedPrefix })
       .first();
+    if (!prefixParam) {
+      prefixParam = await db('account_parameter')
+        .select('account_id')
+        .where('name', 'prefix-parameter')
+        .andWhere('value', 'like', `%${normalizedPrefix}%`)
+        .first();
+    }
 
     if (!prefixParam) throw new Error(`Conta não encontrada para o prefixo '${normalizedPrefix}'`);
 

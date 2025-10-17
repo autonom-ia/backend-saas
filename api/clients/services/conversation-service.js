@@ -12,11 +12,18 @@ async function createChatwootDbConnection(identifier) {
       accountId = raw;
     } else {
       const normalizedPrefix = raw.replace(/^\/+|\/+$/g, '');
-      // prefix -> account_id
-      const prefixParam = await db('account_parameter')
+      // Tenta match exato e depois LIKE
+      let prefixParam = await db('account_parameter')
         .select('account_id')
         .where({ name: 'prefix-parameter', value: normalizedPrefix })
         .first();
+      if (!prefixParam) {
+        prefixParam = await db('account_parameter')
+          .select('account_id')
+          .where('name', 'prefix-parameter')
+          .andWhere('value', 'like', `%${normalizedPrefix}%`)
+          .first();
+      }
       if (!prefixParam) throw new Error(`Conta não encontrada para o prefixo '${normalizedPrefix}'`);
       accountId = prefixParam.account_id;
     }
