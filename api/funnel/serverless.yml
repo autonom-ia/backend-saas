@@ -66,6 +66,7 @@ functions:
                 accountId: true
 
   createConversationRegister:
+    vpc: null
     handler: handlers/create-conversation-register.handler
     layers:
       - { Ref: CommonLibsLambdaLayer }

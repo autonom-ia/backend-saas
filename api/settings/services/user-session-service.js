@@ -42,9 +42,19 @@ const createUserSession = async (sessionData) => {
       })
       .first();
     
-    // Se já existe uma sessão, retorna ela em vez de criar uma nova
+    // Se já existe uma sessão, atualizar o name se vier no payload e estiver nulo/vazio na base
     if (existingSession) {
       console.log(`Sessão existente encontrada com ID: ${existingSession.id}`);
+      const hasIncomingName = typeof sessionData.name === 'string' && sessionData.name.trim().length > 0;
+      const storedNameMissing = existingSession.name == null || String(existingSession.name).trim().length === 0;
+      if (hasIncomingName && storedNameMissing) {
+        console.log('Atualizando name da user_session existente (estava nulo/vazio)...');
+        const [updated] = await db('user_session')
+          .where({ id: existingSession.id })
+          .update({ name: sessionData.name })
+          .returning('*');
+        return updated || existingSession;
+      }
       return existingSession;
     }
     

@@ -2,7 +2,7 @@
  * Serviço para operações com registros de conversas de funil
  */
 const { getDbConnection } = require('../utils/database');
-const { getCache, setCache, invalidateCache } = require('../utils/cache');
+const { createKanbanItem, updateKanbanItem } = require('./kanban-items-service');
 
 /**
  * Cria um novo registro de conversa de funil
@@ -74,13 +74,171 @@ const createConversationFunnelRegister = async (registerData) => {
         console.error(`Erro ao atualizar user_session ${registerData.user_session_id}:`, updateError);
       }
     }
-    
-    // Invalidar cache se necessário (opcional, dependendo da lógica de negócio)
-    if (registerData.account_id) {
-      const cacheKey = `account-funnel:${registerData.account_id}`;
-      await invalidateCache(cacheKey);
+    // Cache removido para evitar dependência de VPC/Redis nesta rota
+
+    // Criar/Atualizar item no kanban para a user_session
+    if (registerData.user_session_id) {
+      try {
+        // Resolver dados necessários
+        const userSessionId = registerData.user_session_id;
+        const summary = registerData.summary || null;
+        const priority = registerData.priority || null;
+        const funnelStageId = registerData.conversation_funnel_step_id || null;
+        // Obter o nome/telefone da user_session para usar como título do Kanban
+        let userSessionName = null;
+        let userSessionPhone = null;
+        try {
+          if (userSessionId) {
+            const usRow = await db('user_session')
+              .select('name', 'phone')
+              .where('id', userSessionId)
+              .first();
+            userSessionName = (usRow && usRow.name) ? usRow.name : null;
+            userSessionPhone = (usRow && usRow.phone) ? usRow.phone : null;
+          }
+        } catch (e) {
+          console.warn('Não foi possível obter name da user_session para título do Kanban:', e?.message || e);
+        }
+
+        // Buscar funnel_id via conversation_funnel_step se informado
+        let funnelId = null;
+        if (funnelStageId) {
+          const step = await db('conversation_funnel_step')
+            .select('conversation_funnel_id')
+            .where('id', funnelStageId)
+            .first();
+          funnelId = step ? step.conversation_funnel_id : null;
+        }
+
+        // Garantir account_id (do payload ou via user_session)
+        let accountId = registerData.account_id || null;
+        if (!accountId) {
+          const us = await db('user_session').select('account_id').where('id', userSessionId).first();
+          accountId = us ? us.account_id : null;
+        }
+
+        // Fallback de funnel_id através da account, se necessário
+        if (!funnelId && accountId) {
+          const acc = await db('account').select('conversation_funnel_id').where('id', accountId).first();
+          funnelId = acc ? acc.conversation_funnel_id : null;
+        }
+
+        // Verificar se já existe item para a user_session
+        const existing = await db('kanban_items')
+          .where({ user_session_id: userSessionId })
+          .first();
+
+        const now = new Date();
+        if (existing) {
+          await updateKanbanItem(existing.id, {
+            summary,
+            funnel_stage_id: funnelStageId,
+            conversation_funnel_register_id: createdRegister.id,
+            timer_started_at: now,
+            priority,
+          });
+        } else if (accountId && funnelId && funnelStageId) {
+          await createKanbanItem({
+            account_id: accountId,
+            funnel_id: funnelId,
+            funnel_stage_id: funnelStageId,
+            user_session_id: userSessionId,
+            position: 0,
+            summary,
+            title: userSessionName || userSessionPhone || 'Kanban Item',
+            timer_started_at: now,
+            priority,
+            conversation_funnel_register_id: createdRegister.id,
+          });
+        } else {
+          console.warn('Não foi possível criar kanban_items: campos obrigatórios ausentes', {
+            accountId,
+            funnelId,
+            funnelStageId,
+          });
+        }
+      } catch (kanbanError) {
+        console.error('Erro ao criar/atualizar kanban_items para user_session:', kanbanError);
+      }
     }
-    
+
+    // Se assign_to_team na etapa do funil for true, chamar Autonomia/Clients/AssignContacts
+    try {
+      const stepId = registerData.conversation_funnel_step_id;
+      if (stepId) {
+        const step = await db('conversation_funnel_step')
+          .select('assign_to_team')
+          .where('id', stepId)
+          .first();
+        if (step && step.assign_to_team) {
+          // Obter dados necessários a partir da user_session
+          let us = await db('user_session')
+            .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
+            .where('id', registerData.user_session_id)
+            .first();
+
+          // Backfill inbox_id / conversation_id a partir do body se ausentes e persistir
+          const updates = {};
+          if (!us?.inbox_id && registerData.chatwoot_inbox) {
+            const parsedInbox = parseInt(registerData.chatwoot_inbox, 10);
+            if (!Number.isNaN(parsedInbox)) updates.inbox_id = parsedInbox;
+          }
+          if (!us?.conversation_id && registerData.chatwoot_conversations) {
+            const parsedConv = parseInt(registerData.chatwoot_conversations, 10);
+            if (!Number.isNaN(parsedConv)) updates.conversation_id = parsedConv;
+          }
+          if (Object.keys(updates).length > 0) {
+            await db('user_session').where('id', us.id).update(updates);
+            // Recarregar us com valores atualizados
+            us = await db('user_session')
+              .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
+              .where('id', registerData.user_session_id)
+              .first();
+          }
+
+          // Montar payload priorizando valores do body quando presentes
+          const accountId = registerData.chatwoot_account;
+          const inboxId = registerData.chatwoot_inbox;
+          const conversationId = registerData.chatwoot_conversations;
+          const contactId = registerData.chatwoot_contact;
+
+          if (accountId && contactId && inboxId && conversationId) {
+            const payload = {
+              accountId,
+              contactId,
+              inboxId,
+              conversationId,
+            };
+            const url = 'https://api-clients.autonomia.site/Autonomia/Clients/AssignContacts';
+            try {
+              const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              if (!resp.ok) {
+                const text = await resp.text();
+                console.error('AssignContacts falhou', resp.status, text);
+              } else {
+                console.log('AssignContacts chamado com sucesso para conversation', conversationId);
+              }
+            } catch (httpErr) {
+              console.error('Erro HTTP ao chamar AssignContacts:', httpErr);
+            }
+          } else {
+            console.warn('Dados insuficientes para AssignContacts', {
+              accountId,
+              contactId,
+              inboxId,
+              conversationId,
+            });
+          }
+        }
+      }
+    } catch (assignErr) {
+      console.error('Erro ao processar assign_to_team:', assignErr);
+    }
+
     return createdRegister;
   } catch (error) {
     console.error('Erro ao criar registro de conversa de funil:', error);

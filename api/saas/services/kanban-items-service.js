@@ -30,6 +30,7 @@ const listKanbanItems = async (params = {}) => {
     .leftJoin('conversation_funnel as f', 'f.id', 'ki.funnel_id')
     .leftJoin('conversation_funnel_step as s', 's.id', 'ki.funnel_stage_id')
     .leftJoin('user_session as us', 'us.id', 'ki.user_session_id')
+    .leftJoin('conversation_funnel_register as cfr', 'cfr.id', 'ki.conversation_funnel_register_id')
     .modify((qb) => {
       if (accountId) qb.where('ki.account_id', accountId);
     })
@@ -38,7 +39,13 @@ const listKanbanItems = async (params = {}) => {
       db.raw('a.name as account_name'),
       db.raw('f.name as funnel_name'),
       db.raw('s.name as funnel_stage_name'),
-      db.raw('us.name as user_session_name')
+      db.raw('s.kanban_code as funnel_stage_kanban_code'),
+      db.raw('us.name as user_session_name'),
+      db.raw('cfr.id as cfr_id'),
+      db.raw('cfr.summary as cfr_summary'),
+      db.raw('cfr.conversation_funnel_step_id as cfr_conversation_funnel_step_id'),
+      db.raw('cfr.last_timestamptz as cfr_last_timestamptz'),
+      db.raw('cfr.created_at as cfr_created_at')
     )
     .orderBy([{ column: 'ki.position', order: 'asc' }, { column: 'ki.created_at', order: 'asc' }])
     .limit(limit)

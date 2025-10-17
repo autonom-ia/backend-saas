@@ -3,8 +3,7 @@
  */
 const { getDbConnection, closeDbConnection } = require('../utils/database');
 const knex = require('knex');
-const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
-const ssmClient = new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+// Removido uso de SSM. Os parâmetros agora são obtidos da tabela account_parameter e valores fixos
 
 /**
  * Busca parâmetros de prefixo para todas as contas
@@ -25,98 +24,52 @@ const getPrefixParameters = async () => {
   }
 };
 
-/**
- * Busca parâmetros do AWS SSM Parameter Store
- * @param {string} paramPath - Caminho do parâmetro no SSM
- * @returns {Promise<string>} - Valor do parâmetro
- */
-const getSSMParameter = async (paramPath) => {
-  console.log(`Iniciando busca do parâmetro SSM: ${paramPath}`);
-  try {
-    const command = new GetParameterCommand({
-      Name: paramPath,
-      WithDecryption: true
-    });
-    
-    // Adicionar timeout à chamada SSM
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Timeout ao buscar parâmetro ${paramPath} após 5 segundos`));
-      }, 5000);
-    });
-    
-    // Corrida entre a chamada SSM e o timeout
-    const response = await Promise.race([
-      ssmClient.send(command),
-      timeoutPromise
-    ]);
-    
-    console.log(`Parâmetro ${paramPath} obtido com sucesso`);
-    return response.Parameter.Value;
-  } catch (error) {
-    console.error(`Erro ao buscar parâmetro ${paramPath}:`, error.message);
-    throw new Error(`Erro no parâmetro: ${paramPath} - ${error.message}`);
-  }
-};
 
 /**
- * Cria uma conexão com o banco de dados do Chatwoot usando o prefixo
- * @param {string} prefix - Prefixo para os parâmetros do banco
+ * Cria uma conexão com o banco de dados do Chatwoot usando valores fixos e host da tabela account_parameter
+ * - host: lido de account_parameter.name = 'chatwoot_db_host' para a conta mapeada por 'prefix-parameter'
+ * - port: 5432
+ * - database: chatwoot
+ * - user: postgres
+ * - password: Mfcd62!!Mfcd62!!
+ * @param {string} prefix - Prefixo (ex.: 'empresta') utilizado para localizar a conta
  * @returns {Object} - Conexão com o banco de dados
  */
 const createChatwootDbConnection = async (prefix) => {
   try {
-    console.log(`Buscando parâmetros de conexão para prefixo: ${prefix}`);
-    
-    // Extrair o prefixo para as variáveis de ambiente
-    // Remove a barra no início e no final e converte para maiúsculas
-    const envPrefix = prefix.replace(/^\/|\/$/g, '').split('/')[0].toUpperCase();
-    console.log(`Prefixo de ambiente calculado: ${envPrefix}`);
-    
-    // Construir os nomes das variáveis de ambiente com base no prefixo
-    const hostVarName = `${envPrefix}_CHATWOOT_DB_HOST`;
-    const nameVarName = `${envPrefix}_CHATWOOT_DB_NAME`;
-    const passwordVarName = `${envPrefix}_CHATWOOT_DB_PASSWORD`;
-    const portVarName = `${envPrefix}_CHATWOOT_DB_PORT`;
-    const userVarName = `${envPrefix}_CHATWOOT_DB_USER`;
-    
-    console.log(`Buscando variáveis de ambiente:`);
-    console.log(`- ${hostVarName}`);
-    console.log(`- ${nameVarName}`);
-    console.log(`- ${passwordVarName}`);
-    console.log(`- ${portVarName}`);
-    console.log(`- ${userVarName}`);
-    
-    // Buscar parâmetros das variáveis de ambiente
-    const host = process.env[hostVarName];
-    const name = process.env[nameVarName];
-    const password = process.env[passwordVarName];
-    const port = process.env[portVarName];
-    const user = process.env[userVarName];
-    
-    // Verificar se todos os parâmetros necessários estão presentes
-    const missingEnvVars = [];
-    if (!host) missingEnvVars.push(hostVarName);
-    if (!name) missingEnvVars.push(nameVarName);
-    if (!password) missingEnvVars.push(passwordVarName);
-    if (!port) missingEnvVars.push(portVarName);
-    if (!user) missingEnvVars.push(userVarName);
-    
-    if (missingEnvVars.length > 0) {
-      throw new Error(`Variáveis de ambiente não encontradas: ${missingEnvVars.join(', ')}`);
+    const db = getDbConnection();
+    const normalizedPrefix = String(prefix || '').replace(/^\/+|\/+$/g, '');
+    console.log(`Buscando host do Chatwoot para prefixo: ${normalizedPrefix}`);
+
+    // Mapear prefixo -> account_id via account_parameter.name = 'prefix-parameter'
+    const prefixParam = await db('account_parameter')
+      .select('account_id')
+      .where({ name: 'prefix-parameter', value: normalizedPrefix })
+      .first();
+
+    if (!prefixParam) {
+      throw new Error(`Conta não encontrada para o prefixo '${normalizedPrefix}'`);
     }
 
-    
-    // Log dos parâmetros de conexão (exceto senha)
-    console.log(`Parâmetros de conexão para Chatwoot (prefixo ${prefix}):`);
-    console.log(`- Host: ${host}`);
-    console.log(`- Database: ${name}`);
-    console.log(`- Port: ${port}`);
-    console.log(`- User: ${user}`);
-    console.log('- Password: [REDACTED]');
-    
-    // Criar conexão com o banco de dados do Chatwoot
-    console.log(`Tentando conectar ao banco Chatwoot: ${host}:${port}/${name} como ${user}`);
+    const accountId = prefixParam.account_id;
+
+    // Buscar host do Chatwoot
+    const hostParam = await db('account_parameter')
+      .select('value')
+      .where({ account_id: accountId, name: 'chatwoot_db_host' })
+      .first();
+
+    if (!hostParam || !hostParam.value) {
+      throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado para account_id=${accountId}`);
+    }
+
+    const host = hostParam.value;
+    const port = 5432;
+    const name = 'chatwoot';
+    const user = 'postgres';
+    const password = 'Mfcd62!!Mfcd62!!';
+
+    console.log(`Conectando ao Chatwoot DB em ${host}:${port}/${name} como ${user}`);
     const chatwootDb = knex({
       client: 'pg',
       connection: {
@@ -127,14 +80,12 @@ const createChatwootDbConnection = async (prefix) => {
         database: name
       },
       pool: { min: 0, max: 1 },
-      acquireConnectionTimeout: 10000 // 10 segundos para timeout de conexão
+      acquireConnectionTimeout: 10000
     });
-    
-    // Testar conexão com uma consulta simples
-    console.log('Testando conexão com o banco Chatwoot...');
+
+    // Testar conexão
     await chatwootDb.raw('SELECT 1');
     console.log('Conexão com o banco Chatwoot estabelecida com sucesso!');
-    
     return chatwootDb;
   } catch (error) {
     console.error(`Erro ao criar conexão com banco de dados do Chatwoot (prefixo: ${prefix}):`, error);
