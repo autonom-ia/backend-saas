@@ -111,9 +111,13 @@ functions:
       - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
-          path: Autonomia/Evolution/SetChatwoot
+          path: Autonomia/Evolution/SetChatwoot/{instance}
           method: post
           cors: true
+          request:
+            parameters:
+              paths:
+                instance: true
           authorizer: ${self:custom.authorizer}
   connectInstance:
     handler: handlers/connect.handler

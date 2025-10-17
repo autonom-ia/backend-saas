@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { setChatwoot, configureChatwootInbox } = require('../services/evolution-service');
+const { setChatwoot, configureChatwootInbox, provisionChatwoot } = require('../services/evolution-service');
 const { getDbConnection } = require('../utils/database');
 const { createResponse, preflight, getOrigin } = require('../utils/cors');
 
@@ -78,8 +78,26 @@ exports.handler = async (event) => {
       }
     }
 
+    // Se account_id NÃO foi enviado, provisionar Chatwoot para a conta e preencher os campos obrigatórios
+    if (!Object.prototype.hasOwnProperty.call(payload, 'account_id')) {
+      try {
+        const prov = await provisionChatwoot(domain);
+        payload.account_id = prov.chatwootAccountId;
+        if (!payload.url) payload.url = prov.chatwootUrl;
+        if (!payload.token) payload.token = prov.chatwootToken;
+        console.log('[set-chatwoot] Provision concluído. Campos preenchidos a partir do provisionamento', {
+          account_id: String(payload.account_id),
+          url: payload.url,
+          tokenPreview: typeof payload.token === 'string' ? payload.token.slice(0, 4) + '****' : undefined,
+        });
+      } catch (provErr) {
+        const msg = provErr?.message || String(provErr);
+        return createResponse(400, { message: 'Falha ao provisionar Chatwoot para a conta', details: msg }, origin);
+      }
+    }
+
     // Persistir parâmetros na nossa base (para permitir configureChatwootInbox buscar valores)
-    // Apenas se vierem no body
+    // Persistimos após possível provisionamento para garantir consistência
     try {
       const db = getDbConnection();
       const account = await db('account').where({ domain }).first();
@@ -95,11 +113,77 @@ exports.handler = async (event) => {
         await upsert('chatwoot-token', payload.token);
       }
     } catch (e) {
-      console.warn('[set-chatwoot] Falha ao persistir parâmetros locais', e?.message || e);
+      console.warn('[set-chatwoot] Falha ao persistir parâmetros locais (após provision)', e?.message || e);
+    }
+
+    // Normalizar tipos exigidos pela Evolution
+    if (payload.account_id !== undefined && payload.account_id !== null) {
+      const raw = String(payload.account_id).trim();
+      // Evolution espera accountId como string
+      payload.account_id = raw;
+    }
+    if (payload.url !== undefined && payload.url !== null) {
+      payload.url = String(payload.url).trim();
+    }
+    if (payload.token !== undefined && payload.token !== null) {
+      payload.token = String(payload.token).trim();
     }
 
     // Chamar Evolution API
-    const result = await setChatwoot(domain, instance, payload);
+    try {
+      const preview = {
+        instance,
+        domain,
+        body: {
+          enabled: payload.enabled,
+          url: payload.url,
+          tokenPreview: typeof payload.token === 'string' ? payload.token.slice(0,4) + '****' : undefined,
+          account_id: payload.account_id,
+          accountId: payload.account_id,
+          sign_msg: payload.sign_msg,
+          signMsg: payload.sign_msg,
+          reopen_conversation: payload.reopen_conversation,
+          reopenConversation: payload.reopen_conversation,
+          conversation_pending: payload.conversation_pending,
+          conversationPending: payload.conversation_pending,
+          import_contacts: payload.import_contacts,
+          importContacts: payload.import_contacts,
+          import_messages: payload.import_messages,
+          importMessages: payload.import_messages,
+          days_limit_import_messages: payload.days_limit_import_messages,
+          daysLimitImportMessages: payload.days_limit_import_messages,
+          auto_create: payload.auto_create,
+          autoCreate: payload.auto_create,
+        }
+      };
+      console.log('[set-chatwoot] Enviando para Evolution /chatwoot/set', preview);
+    } catch {}
+    // Construir payload compatível com a Evolution (duplicando camelCase)
+    const evoPayload = (() => {
+      const out = { ...payload };
+      // Evolution requer accountId string
+      out.accountId = payload.account_id != null ? String(payload.account_id) : undefined;
+      out.signMsg = payload.sign_msg;
+      out.reopenConversation = payload.reopen_conversation;
+      out.conversationPending = payload.conversation_pending;
+      out.importContacts = payload.import_contacts;
+      out.importMessages = payload.import_messages;
+      out.daysLimitImportMessages = payload.days_limit_import_messages;
+      out.autoCreate = payload.auto_create;
+      // Remover chaves undefined
+      Object.keys(out).forEach(k => { if (out[k] === undefined) delete out[k]; });
+      return out;
+    })();
+    let result;
+    try {
+      result = await setChatwoot(domain, instance, evoPayload);
+    } catch (e) {
+      const status = e?.response?.status || 400;
+      const data = e?.response?.data;
+      const details = data?.response || data || e?.message || String(e);
+      console.error('[set-chatwoot] Evolution retornou erro', { status, details });
+      return createResponse(status, { message: 'Erro na Evolution ao configurar Chatwoot', details }, origin);
+    }
 
     // Configurar Agent Bot e Inbox no Chatwoot (atualiza feature_flags e seta bot/inbox)
     let cfg;

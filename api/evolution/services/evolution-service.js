@@ -362,15 +362,19 @@ async function configureChatwootInbox(domain, instanceName) {
     throw new Error('Parâmetros chatwoot-url, chatwoot-token e/ou chatwoot-account ausentes');
   }
 
-  // Buscar parâmetros do produto para obter agent_webhook
-  let agentWebhook;
+  // Buscar parâmetros do produto para obter n8n_input_webhook (webhook de entrada do Agent)
+  let inputWebhook;
   if (account.product_id) {
     const prodParamsRows = await db('product_parameter')
       .where('product_id', account.product_id)
       .select('name', 'value');
     const pparams = formatParameters(prodParamsRows);
-    agentWebhook = pparams['agent_webhook'] || pparams['agent-webhook'] || pparams['AGENT_WEBHOOK'];
+    inputWebhook =
+      pparams['n8n_input_webhook'] ||
+      pparams['n8n-input-webhook'] ||
+      pparams['N8N_INPUT_WEBHOOK'];
   }
+  const outgoingUrl = inputWebhook || 'https://auto.autonomia.site/webhook/input-follow';
 
   const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: String(chatwootToken).trim() } });
 
@@ -393,7 +397,7 @@ async function configureChatwootInbox(domain, instanceName) {
   const botBody = {
     name: account.name || account.domain,
     description: 'Agente conversacional',
-    outgoing_url: agentWebhook || '',
+    outgoing_url: outgoingUrl,
     bot_type: 0,
     bot_config: {},
   };
