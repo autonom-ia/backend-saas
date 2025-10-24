@@ -14,12 +14,12 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { name, description, is_default } = body;
+    const { name, description, is_default, agent_instruction } = body;
     if (!name || !description) {
       return errorResponse({ success: false, message: 'Campos obrigatórios: name, description' }, 400);
     }
 
-    const created = await createFunnel({ name, description, is_default });
+    const created = await createFunnel({ name, description, is_default, agent_instruction });
     return success({ success: true, message: 'Funil criado com sucesso', data: created }, 201);
   } catch (error) {
     console.error('Erro ao criar funil:', error);

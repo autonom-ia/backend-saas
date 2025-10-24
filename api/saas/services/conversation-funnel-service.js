@@ -50,25 +50,28 @@ const getFunnelById = async (id) => {
 };
 
 // Cria funil
-const createFunnel = async ({ name, description, is_default = false }) => {
+const createFunnel = async ({ name, description, is_default = false, agent_instruction }) => {
   const knex = getDbConnection();
   if (!name || !description) {
     throw new Error('Campos obrigatórios: name, description');
   }
+  const insertData = { name, description, is_default };
+  if (agent_instruction !== undefined) insertData.agent_instruction = agent_instruction;
   const [created] = await knex('conversation_funnel')
-    .insert({ name, description, is_default })
+    .insert(insertData)
     .returning('*');
   return created;
 };
 
 // Atualiza funil
-const updateFunnel = async (id, { name, description, is_default }) => {
+const updateFunnel = async (id, { name, description, is_default, agent_instruction }) => {
   const knex = getDbConnection();
   await getFunnelById(id);
   const updateData = {};
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
   if (is_default !== undefined) updateData.is_default = is_default;
+  if (agent_instruction !== undefined) updateData.agent_instruction = agent_instruction;
   const [updated] = await knex('conversation_funnel')
     .where({ id })
     .update(updateData)

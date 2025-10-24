@@ -19,12 +19,12 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { name, description, is_default } = body;
-    if (name === undefined && description === undefined && is_default === undefined) {
+    const { name, description, is_default, agent_instruction } = body;
+    if (name === undefined && description === undefined && is_default === undefined && agent_instruction === undefined) {
       return errorResponse({ success: false, message: 'Forneça ao menos um campo para atualizar' }, 400);
     }
 
-    const updated = await updateFunnel(funnelId, { name, description, is_default });
+    const updated = await updateFunnel(funnelId, { name, description, is_default, agent_instruction });
     return success({ success: true, message: 'Funil atualizado com sucesso', data: updated }, 200);
   } catch (error) {
     if (error?.message === 'Funil não encontrado') {

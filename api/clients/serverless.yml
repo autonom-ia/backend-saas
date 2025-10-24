@@ -25,6 +25,11 @@ custom:
     stage: ${opt:stage, 'prod'}
     certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
     createRoute53Record: false
+  authorizer:
+    name: cognitoAuthorizer
+    type: COGNITO_USER_POOLS
+    identitySource: method.request.header.Authorization
+    arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
 
 layers:
   commonLibs:
@@ -141,3 +146,14 @@ functions:
           path: Autonomia/Clients/LoggedUsers
           method: get
           cors: true
+
+  getAccountDomains:
+    handler: handlers/get-account-domains.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Clients/Domains
+          method: get
+          cors: true
+          authorizer: ${self:custom.authorizer}

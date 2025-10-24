@@ -120,13 +120,32 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
     const accountParams = formatParameters(accountParameters);
     const productParams = formatParameters(productParameters);
     
+    // Merge inteligente: se o mesmo parâmetro existir em conta e produto,
+    // prioriza o que estiver preenchido (não nulo/não string vazia).
+    const mergeParamsPreferFilled = (accParams, prodParams) => {
+      const keys = new Set([
+        ...Object.keys(accParams || {}),
+        ...Object.keys(prodParams || {})
+      ]);
+      const result = {};
+      for (const key of keys) {
+        const a = accParams ? accParams[key] : undefined;
+        const p = prodParams ? prodParams[key] : undefined;
+        const hasA = a !== undefined && a !== null && String(a).trim() !== '';
+        const hasP = p !== undefined && p !== null && String(p).trim() !== '';
+        // Preferir valor da account quando preenchido; caso contrário, usar o do produto
+        result[key] = hasA ? a : (hasP ? p : (a !== undefined ? a : p));
+      }
+      return result;
+    };
+    const mergedParams = mergeParamsPreferFilled(accountParams, productParams);
+    
     // Estruturar resposta com os parâmetros diretamente na raiz
     const result = {
       userSessions,
       accounts,
       products,
-      ...accountParams,   // Parâmetros da conta diretamente na raiz
-      ...productParams    // Parâmetros do produto diretamente na raiz
+      ...mergedParams     // Parâmetros mesclados priorizando valores preenchidos
     };
 
     // Armazenar no cache apenas se houver sessões de usuário

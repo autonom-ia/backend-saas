@@ -19,25 +19,28 @@ const getStepById = async (id) => {
 };
 
 // Cria step
-const createStep = async ({ name, description, conversation_funnel_id }) => {
+const createStep = async ({ name, description, conversation_funnel_id, agent_instruction }) => {
   const knex = getDbConnection();
   if (!name || !description || !conversation_funnel_id) {
     throw new Error('Campos obrigatórios: name, description, conversation_funnel_id');
   }
+  const insertData = { name, description, conversation_funnel_id };
+  if (agent_instruction !== undefined) insertData.agent_instruction = agent_instruction;
   const [created] = await knex('conversation_funnel_step')
-    .insert({ name, description, conversation_funnel_id })
+    .insert(insertData)
     .returning('*');
   return created;
 };
 
 // Atualiza step
-const updateStep = async (id, { name, description, conversation_funnel_id }) => {
+const updateStep = async (id, { name, description, conversation_funnel_id, agent_instruction }) => {
   const knex = getDbConnection();
   await getStepById(id);
   const updateData = {};
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
   if (conversation_funnel_id !== undefined) updateData.conversation_funnel_id = conversation_funnel_id;
+  if (agent_instruction !== undefined) updateData.agent_instruction = agent_instruction;
   const [updated] = await knex('conversation_funnel_step')
     .where({ id })
     .update(updateData)

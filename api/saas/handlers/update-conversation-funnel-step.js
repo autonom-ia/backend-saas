@@ -19,12 +19,12 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { name, description, conversation_funnel_id } = body;
-    if (name === undefined && description === undefined && conversation_funnel_id === undefined) {
+    const { name, description, conversation_funnel_id, agent_instruction } = body;
+    if (name === undefined && description === undefined && conversation_funnel_id === undefined && agent_instruction === undefined) {
       return errorResponse({ success: false, message: 'Forneça ao menos um campo para atualizar' }, 400);
     }
 
-    const updated = await updateStep(stepId, { name, description, conversation_funnel_id });
+    const updated = await updateStep(stepId, { name, description, conversation_funnel_id, agent_instruction });
     return success({ success: true, message: 'Step atualizado com sucesso', data: updated }, 200);
   } catch (error) {
     if (error?.message === 'Etapa de funil não encontrada') {
