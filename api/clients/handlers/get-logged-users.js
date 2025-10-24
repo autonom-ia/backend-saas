@@ -18,7 +18,14 @@ module.exports.handler = async (event) => {
       return error('Parâmetro accountId inválido.', 400);
     }
 
-    const users = await getLoggedUsersDetails(accountId, 'empresta');
+    // Receber domain (prefix) do front opcionalmente
+    const rawDomain = qs.domain || qs.prefix || pathParams.domain || pathParams.prefix;
+    const domain = rawDomain ? String(rawDomain).trim() : 'empresta';
+    if (rawDomain && !domain) {
+      return error('Parâmetro domain inválido.', 400);
+    }
+
+    const users = await getLoggedUsersDetails(accountId, domain);
 
     return success({
       accountId,

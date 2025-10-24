@@ -33,6 +33,26 @@ const getAccessibleAccountDomains = async ({ userId, isAdmin }) => {
   return mapDomains(rows);
 };
 
+/**
+ * Alto nível: obtém domínios acessíveis a partir de um userId, resolvendo isAdmin internamente.
+ * Mantém o padrão de handlers finos (sem acesso direto a DB) como em get-messages.
+ */
+const listAccessibleDomainsByUserId = async (userId) => {
+  const db = getDbConnection();
+  const user = await db('users').where({ id: userId }).first();
+  if (!user) {
+    const err = new Error('Usuário não encontrado');
+    err.statusCode = 404;
+    throw err;
+  }
+  const profileIds = await db('user_access_profiles')
+    .where({ user_id: userId })
+    .pluck('access_profile_id');
+  const isAdmin = Array.isArray(profileIds) && profileIds.includes(ADMIN_PROFILE_ID);
+  const rows = await buildDomainQuery(db, { isAdmin, userId });
+  return mapDomains(rows);
+};
+
 const resolveAccessContext = async (db, email) => {
   const user = await db('users').where({ email }).first();
   if (!user) return { user: null, isAdmin: false };
@@ -52,4 +72,5 @@ module.exports = {
   getAccessibleAccountDomains,
   mapDomains,
   resolveAccessContext,
+  listAccessibleDomainsByUserId,
 };
