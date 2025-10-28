@@ -104,6 +104,15 @@ functions:
           method: get
           cors: true
           authorizer: ${self:custom.authorizer}
+
+  listProductTypes:
+    handler: handlers/list-product-types.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ProductTypes
+          method: get
+          cors: true
+          authorizer: ${self:custom.authorizer}
           
   getProduct:
     handler: handlers/get-product.handler
@@ -668,4 +677,17 @@ functions:
             parameters:
               querystrings:
                 accountId: false
+          authorizer: ${self:custom.authorizer}
+
+  updateKanbanItem:
+    handler: handlers/update-kanban-item.handler
+    events:
+      - http:
+          path: Autonomia/Saas/KanbanItems/{itemId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                itemId: true
           authorizer: ${self:custom.authorizer}

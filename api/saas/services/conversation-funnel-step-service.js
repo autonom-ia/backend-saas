@@ -7,6 +7,7 @@ const getAllStepsByAccountId = async (accountId) => {
     .join('account as a', 'a.conversation_funnel_id', 's.conversation_funnel_id')
     .where('a.id', accountId)
     .select('s.*')
+    .orderBy('s.order', 'asc')
     .orderBy('s.created_at', 'desc');
 };
 
@@ -19,13 +20,14 @@ const getStepById = async (id) => {
 };
 
 // Cria step
-const createStep = async ({ name, description, conversation_funnel_id, agent_instruction }) => {
+const createStep = async ({ name, description, conversation_funnel_id, agent_instruction, order }) => {
   const knex = getDbConnection();
   if (!name || !description || !conversation_funnel_id) {
     throw new Error('Campos obrigatórios: name, description, conversation_funnel_id');
   }
   const insertData = { name, description, conversation_funnel_id };
   if (agent_instruction !== undefined) insertData.agent_instruction = agent_instruction;
+  if (order !== undefined) insertData.order = order;
   const [created] = await knex('conversation_funnel_step')
     .insert(insertData)
     .returning('*');
@@ -33,7 +35,7 @@ const createStep = async ({ name, description, conversation_funnel_id, agent_ins
 };
 
 // Atualiza step
-const updateStep = async (id, { name, description, conversation_funnel_id, agent_instruction }) => {
+const updateStep = async (id, { name, description, conversation_funnel_id, agent_instruction, order }) => {
   const knex = getDbConnection();
   await getStepById(id);
   const updateData = {};
@@ -41,6 +43,7 @@ const updateStep = async (id, { name, description, conversation_funnel_id, agent
   if (description !== undefined) updateData.description = description;
   if (conversation_funnel_id !== undefined) updateData.conversation_funnel_id = conversation_funnel_id;
   if (agent_instruction !== undefined) updateData.agent_instruction = agent_instruction;
+  if (order !== undefined) updateData.order = order;
   const [updated] = await knex('conversation_funnel_step')
     .where({ id })
     .update(updateData)

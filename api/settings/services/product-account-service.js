@@ -5,6 +5,69 @@ const { getDbConnection } = require('../utils/database');
 const { getCache, setCache } = require('../utils/cache');
 const { formatParameters } = require('../utils/format-parameters');
 
+function getValueFromPath(obj, path) {
+  try {
+    return path
+      .split(/[\.\[\]\'\"]/)
+      .filter(p => p)
+      .reduce((o, p) => o[p], obj);
+  } catch (e) {
+    return undefined;
+  }
+}
+
+function valueToString(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return value.toString();
+}
+
+function replaceVariables(text, data) {
+  const regex = /\$[a-zA-Z0-9_.\[\]]+/g;
+  const matches = text.match(regex);
+  if (matches) {
+    matches.forEach(variable => {
+      const path = variable.slice(1);
+      const value = getValueFromPath(data, path);
+      const valueStr = valueToString(value);
+      text = text.split(variable).join(valueStr);
+    });
+  }
+  return text;
+}
+
+async function buildAgentInstructions(db, product, productParameters) {
+  if (!product) return '';
+  const blocks = [];
+
+  if (product.product_type_id) {
+    const rows = await db('product_type_instruction')
+      .where('product_type_id', product.product_type_id)
+      .select('code', 'description', 'instruction')
+      .orderBy([{ column: 'code', order: 'asc' }]);
+    for (const r of rows) {
+      const code = r.code || '';
+      const desc = r.description || '';
+      const instr = r.instruction || '';
+      const header = code && desc ? `${code} - ${desc}` : (code || desc);
+      const title = header ? `### ${header}` : '###';
+      blocks.push(`${title}\n${instr}`.trim());
+    }
+  }
+
+  if (Array.isArray(productParameters) && productParameters.length) {
+    for (const p of productParameters) {
+      const name = p.name || '';
+      if (!name.endsWith('_instructions')) continue;
+      const val = p.value || '';
+      const title = `### ${name}`;
+      blocks.push(`${title}\n${val}`.trim());
+    }
+  }
+
+  return blocks.filter(Boolean).join('\n\n');
+}
+
 /**
  * Busca dados de produtos e contas pelo número de telefone e telefone da conta
  * @param {string} phone - Telefone do usuário para buscar sessões
@@ -139,13 +202,35 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
       return result;
     };
     const mergedParams = mergeParamsPreferFilled(accountParams, productParams);
+
+    const product = products && products[0] ? products[0] : null;
+    const rawAgentInstructions = await buildAgentInstructions(db, product, productParameters);
+
+    const productAccountSettings = {
+      product_account_settings: {
+        accounts,
+        products,
+        ...mergedParams
+      }
+    };
+    let knowledgeBase = mergedParams && mergedParams.knowledgeBase !== undefined ? mergedParams.knowledgeBase : {};
+    if (typeof knowledgeBase === 'string') {
+      try { knowledgeBase = JSON.parse(knowledgeBase); } catch (_) { knowledgeBase = {}; }
+    }
+    const data = knowledgeBase || {};
+    const outputText = replaceVariables(rawAgentInstructions || '', data);
+
+    const filteredMergedParams = Object.fromEntries(
+      Object.entries(mergedParams || {}).filter(([k]) => !k.endsWith('_instructions'))
+    );
     
     // Estruturar resposta com os parâmetros diretamente na raiz
     const result = {
       userSessions,
       accounts,
       products,
-      ...mergedParams     // Parâmetros mesclados priorizando valores preenchidos
+      agent_instructions: outputText,
+      ...filteredMergedParams
     };
 
     // Armazenar no cache apenas se houver sessões de usuário

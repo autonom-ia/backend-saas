@@ -47,13 +47,14 @@ const getProductById = async (id) => {
  * @param {Object} productData - Dados do produto
  * @returns {Promise<Object>} Produto criado
  */
-const createProduct = async ({ name, description }) => {
+const createProduct = async ({ name, description, product_type_id }) => {
   const knex = getDbConnection();
   
   const [newProduct] = await knex('product')
     .insert({
       name,
-      description
+      description,
+      product_type_id: product_type_id || null
     })
     .returning('*');
   
@@ -66,7 +67,7 @@ const createProduct = async ({ name, description }) => {
  * @param {Object} productData - Dados do produto a atualizar
  * @returns {Promise<Object>} Produto atualizado
  */
-const updateProduct = async (id, { name, description }) => {
+const updateProduct = async (id, { name, description, product_type_id }) => {
   const knex = getDbConnection();
   
   // Verificar se o produto existe
@@ -77,6 +78,7 @@ const updateProduct = async (id, { name, description }) => {
     .update({
       name,
       description,
+      product_type_id: typeof product_type_id === 'undefined' ? knex.raw('product_type_id') : (product_type_id || null),
       updated_at: knex.fn.now()
     })
     .returning('*');

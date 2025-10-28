@@ -25,10 +25,10 @@ exports.handler = async (event, context) => {
       }, 400);
     }
     
-    const { name, description } = requestBody;
+    const { name, description, product_type_id } = requestBody;
     
     // Validar se pelo menos um campo foi fornecido para atualização
-    if (!name && !description) {
+    if (typeof name === 'undefined' && typeof description === 'undefined' && typeof product_type_id === 'undefined') {
       return errorResponse({
         success: false,
         message: 'Pelo menos um campo deve ser fornecido para atualização'
@@ -37,7 +37,8 @@ exports.handler = async (event, context) => {
     
     const updatedProduct = await updateProduct(productId, {
       name,
-      description
+      description,
+      product_type_id
     });
     
     return success({

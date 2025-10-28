@@ -146,6 +146,26 @@ async function getClient(domain) {
     });
     return config;
   });
+  client.interceptors.response.use(
+    (res) => {
+      try {
+        console.log('[Evolution] Response', { url: res?.config?.url, status: res?.status });
+      } catch {}
+      return res;
+    },
+    (error) => {
+      try {
+        const res = error?.response;
+        console.error('[Evolution] Response error', {
+          url: res?.config?.url || error?.config?.url,
+          status: res?.status,
+          data: res?.data,
+          headers: res?.headers,
+        });
+      } catch {}
+      return Promise.reject(error);
+    }
+  );
   console.log('[Evolution] Axios client criado', { baseURL: apiUrl, apiKeyPreview: mask(apiKey) });
   return client;
 }
@@ -188,8 +208,29 @@ async function createInstance(domain, payload) {
 
 async function setChatwoot(domain, instance, payload) {
   const client = await getClient(domain);
-  const { data } = await client.post(`/chatwoot/set/${encodeURIComponent(instance)}`, payload);
-  return data;
+  try {
+    const prev = {
+      ...payload,
+      tokenPreview: payload?.token ? String(payload.token).slice(0, 4) + '****' : undefined,
+      token: undefined,
+    };
+    console.log('[EvolutionService.setChatwoot] POST', {
+      url: client?.defaults?.baseURL + `/chatwoot/set/${encodeURIComponent(instance)}`,
+      payload: prev,
+    });
+  } catch {}
+  try {
+    const { data } = await client.post(`/chatwoot/set/${encodeURIComponent(instance)}`, payload);
+    return data;
+  } catch (e) {
+    console.error('[EvolutionService.setChatwoot] Request failed', {
+      url: e?.config?.url,
+      status: e?.response?.status,
+      data: e?.response?.data,
+      headers: e?.response?.headers,
+    });
+    throw e;
+  }
 }
 
 async function connect(domain, instance, number) {

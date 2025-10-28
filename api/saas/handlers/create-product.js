@@ -17,7 +17,7 @@ exports.handler = async (event, context) => {
       }, 400);
     }
     
-    const { name, description } = requestBody;
+    const { name, description, product_type_id } = requestBody;
     
     // Validação dos campos obrigatórios
     if (!name) {
@@ -27,16 +27,12 @@ exports.handler = async (event, context) => {
       }, 400);
     }
     
-    if (!description) {
-      return errorResponse({
-        success: false,
-        message: 'Descrição do produto é obrigatória'
-      }, 400);
-    }
+    // description opcional
     
     const newProduct = await createProduct({
       name,
-      description
+      description,
+      product_type_id
     });
 
     // Clonar parâmetros base de produto (distinct name) com value = '' para o novo produto

@@ -9,10 +9,11 @@ exports.handler = async (event) => {
   try {
     const qs = event.queryStringParameters || {};
     const accountId = qs.accountId || qs.account_id;
+    const funnelStageId = qs.funnelStageId || qs.funnel_stage_id;
     const limit = qs.limit ? parseInt(qs.limit, 10) : undefined;
     const offset = qs.offset ? parseInt(qs.offset, 10) : undefined;
 
-    const items = await listKanbanItems({ accountId, limit, offset });
+    const items = await listKanbanItems({ accountId, funnelStageId, limit, offset });
 
     await closeDbConnection();
     return success(items);
