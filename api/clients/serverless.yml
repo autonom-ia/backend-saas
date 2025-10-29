@@ -157,3 +157,19 @@ functions:
           method: get
           cors: true
           authorizer: ${self:custom.authorizer}
+
+  # Chatwoot proxy
+  chatwootProxy:
+    handler: handlers/chatwoot-proxy.handler
+    timeout: 60
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Clients/ChatwootProxy
+          method: get
+          cors: true
+      - http:
+          path: Autonomia/Clients/ChatwootProxy
+          method: post
+          cors: true
