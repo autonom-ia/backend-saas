@@ -23,36 +23,23 @@ const clientsDb = knex({
 // Fallback padrão quando não há agente disponível
 const DEFAULT_ASSIGNEE_ID = 1;
 
-// Configuração da conexão com o banco de dados do Chatwoot (host via account_parameter, demais fixos)
-async function createChatwootDbConnection(prefix) {
+/**
+ * Cria conexão com banco de dados do Chatwoot usando account_id
+ * @param {number} systemAccountId - ID da conta no sistema
+ * @returns {Promise<knex>} - Conexão Knex com o banco do Chatwoot
+ */
+async function createChatwootDbConnection(systemAccountId) {
   try {
     const db = getDbConnection();
-    const normalizedPrefix = String(prefix || '').replace(/^\/+|\/+$/g, '');
-    console.log(`Buscando host do Chatwoot para prefixo: ${normalizedPrefix}`);
+    console.log(`Buscando configuração do Chatwoot para account_id: ${systemAccountId}`);
 
-    // Mapear prefixo -> account_id via account_parameter.name = 'prefix-parameter'
-    let prefixParam = await db('account_parameter')
-      .select('account_id')
-      .where({ name: 'prefix-parameter', value: normalizedPrefix })
-      .first();
-    if (!prefixParam) {
-      prefixParam = await db('account_parameter')
-        .select('account_id')
-        .where('name', 'prefix-parameter')
-        .andWhere('value', 'like', `%${normalizedPrefix}%`)
-        .first();
-    }
-
-    if (!prefixParam) throw new Error(`Conta não encontrada para o prefixo '${normalizedPrefix}'`);
-
-    const accountId = prefixParam.account_id;
     const hostParam = await db('account_parameter')
       .select('value')
-      .where({ account_id: accountId, name: 'chatwoot_db_host' })
+      .where({ account_id: systemAccountId, name: 'chatwoot_db_host' })
       .first();
 
     if (!hostParam || !hostParam.value) {
-      throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado para account_id=${accountId}`);
+      throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado para account_id=${systemAccountId}`);
     }
 
     const host = hostParam.value;
@@ -60,6 +47,8 @@ async function createChatwootDbConnection(prefix) {
     const name = 'chatwoot';
     const user = 'postgres';
     const password = 'Mfcd62!!Mfcd62!!';
+
+    console.log(`Conectando ao banco Chatwoot em ${host}:${port}/${name}`);
 
     const chatwootDb = knex({
       client: 'pg',
@@ -77,18 +66,18 @@ async function createChatwootDbConnection(prefix) {
 
 /**
  * Retorna detalhes dos usuários logados (online): id, name, email, open_conversations
- * @param {number} accountId - ID da conta do Chatwoot (default 6)
- * @param {string} prefix - Prefixo para variáveis de ambiente do Chatwoot (ex: 'empresta')
+ * @param {number} chatwootAccountId - ID da conta do Chatwoot
+ * @param {number} systemAccountId - ID da conta no sistema
  * @returns {Promise<Array<{id:number,name:string,email:string,open_conversations:number}>>}
  */
-async function getLoggedUsersDetails(accountId = 6, prefix = 'empresta') {
+async function getLoggedUsersDetails(chatwootAccountId, systemAccountId) {
   let chatwootDb;
   try {
-    const onlineIds = await getOnlineAgents(accountId);
+    const onlineIds = await getOnlineAgents(chatwootAccountId, systemAccountId);
     if (!onlineIds || onlineIds.length === 0) return [];
 
-    // Conectar no banco do Chatwoot usando o prefixo
-    chatwootDb = await createChatwootDbConnection(prefix);
+    // Conectar no banco do Chatwoot usando o account_id
+    chatwootDb = await createChatwootDbConnection(systemAccountId);
 
     // Buscar nome e email dos usuários online
     const users = await chatwootDb('users')
@@ -174,18 +163,40 @@ async function getAvailableAgentsForInbox(chatwootDb, inboxId) {
 
 /**
  * Obtém a lista de agentes online do Chatwoot
- * @param {number} accountId - ID da conta do Chatwoot
+ * @param {number} chatwootAccountId - ID da conta do Chatwoot
+ * @param {number} systemAccountId - ID da conta no sistema
  * @returns {Promise<number[]>} - Array de IDs dos agentes online
  */
-async function getOnlineAgents(accountId) {
-  console.log(`Obtendo agentes online para a conta: ${accountId}`);
+async function getOnlineAgents(chatwootAccountId, systemAccountId) {
+  console.log(`Obtendo agentes online para a conta Chatwoot: ${chatwootAccountId}`);
   
   try {
+    // Buscar URL e token do Chatwoot
+    const db = getDbConnection();
+    const params = await db('account_parameter')
+      .select('name', 'value')
+      .where({ account_id: systemAccountId })
+      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
+      .then(rows => {
+        const config = {};
+        rows.forEach(r => { config[r.name] = r.value; });
+        return config;
+      });
+    
+    if (!params['chatwoot-url'] || !params['chatwoot-token']) {
+      throw new Error(`Parâmetros 'chatwoot-url' ou 'chatwoot-token' não encontrados para account_id=${systemAccountId}`);
+    }
+    
+    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
+    const apiToken = params['chatwoot-token'];
+    
+    console.log(`Chamando API: ${baseUrl}/api/v1/accounts/${chatwootAccountId}/agents`);
+    
     const response = await axios.get(
-      `https://chat-empresta.autonomia.site/api/v1/accounts/${accountId}/agents`,
+      `${baseUrl}/api/v1/accounts/${chatwootAccountId}/agents`,
       {
         headers: {
-          'api_access_token': 'jpb8quPZo9eVYRqgReddwgmV'
+          'api_access_token': apiToken
         }
       }
     );
@@ -325,7 +336,7 @@ async function getNextAgent(availableAgentIds, inboxId, autoAssignmentConfig, ch
  * @param {number} assigneeId - ID do agente atribuído
  * @param {knex} chatwootDb - Conexão com o banco de dados do Chatwoot
  */
-async function addManagerAsParticipant(accountId, conversationId, assigneeId, chatwootDb) {
+async function addManagerAsParticipant(chatwootAccountId, systemAccountId, conversationId, assigneeId, chatwootDb) {
   console.log(`Adicionando gerente como participante da conversa ${conversationId} para o agente ${assigneeId}`);
   try {
     // 1. Encontrar o time do agente
@@ -356,14 +367,29 @@ async function addManagerAsParticipant(accountId, conversationId, assigneeId, ch
     const managerId = manager.user_id;
     console.log(`Gerente encontrado: ${managerId} para o time ${team_id}`);
 
-    // 3. Chamar a API para adicionar o agente e o gerente como participantes
+    // 3. Buscar configurações da API
+    const db = getDbConnection();
+    const params = await db('account_parameter')
+      .select('name', 'value')
+      .where({ account_id: systemAccountId })
+      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
+      .then(rows => {
+        const config = {};
+        rows.forEach(r => { config[r.name] = r.value; });
+        return config;
+      });
+    
+    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
+    const apiToken = params['chatwoot-token'];
+
+    // 4. Chamar a API para adicionar o agente e o gerente como participantes
     const participants = [assigneeId, managerId];
     await axios.patch(
-      `https://chat-empresta.autonomia.site/api/v1/accounts/${accountId}/conversations/${conversationId}/participants`,
+      `${baseUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${conversationId}/participants`,
       { user_ids: participants },
       {
         headers: {
-          'api_access_token': 'jpb8quPZo9eVYRqgReddwgmV',
+          'api_access_token': apiToken,
           'Content-Type': 'application/json'
         }
       }
@@ -382,15 +408,30 @@ async function addManagerAsParticipant(accountId, conversationId, assigneeId, ch
  * @param {number} conversationId - ID da conversa
  * @param {string} status - Novo status ('open', 'snoozed', etc.)
  */
-async function toggleConversationStatus(accountId, conversationId, status = 'open') {
+async function toggleConversationStatus(chatwootAccountId, systemAccountId, conversationId, status = 'open') {
   console.log(`Alterando status da conversa ${conversationId} para '${status}'`);
   try {
+    // Buscar configurações da API
+    const db = getDbConnection();
+    const params = await db('account_parameter')
+      .select('name', 'value')
+      .where({ account_id: systemAccountId })
+      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
+      .then(rows => {
+        const config = {};
+        rows.forEach(r => { config[r.name] = r.value; });
+        return config;
+      });
+    
+    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
+    const apiToken = params['chatwoot-token'];
+    
     await axios.post(
-      `https://chat-empresta.autonomia.site/api/v1/accounts/${accountId}/conversations/${conversationId}/toggle_status`,
+      `${baseUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${conversationId}/toggle_status`,
       { status }, // Payload para definir o status
       {
         headers: {
-          'api_access_token': 'jpb8quPZo9eVYRqgReddwgmV',
+          'api_access_token': apiToken,
           'Content-Type': 'application/json'
         }
       }
@@ -402,16 +443,31 @@ async function toggleConversationStatus(accountId, conversationId, status = 'ope
   }
 }
 
-async function assignConversationToAgent(accountId, conversationId, assigneeId, chatwootDb) {
+async function assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, assigneeId, chatwootDb) {
   console.log(`Atribuindo conversa ${conversationId} ao agente ${assigneeId}`);
   
   try {
+    // Buscar configurações da API
+    const db = getDbConnection();
+    const params = await db('account_parameter')
+      .select('name', 'value')
+      .where({ account_id: systemAccountId })
+      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
+      .then(rows => {
+        const config = {};
+        rows.forEach(r => { config[r.name] = r.value; });
+        return config;
+      });
+    
+    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
+    const apiToken = params['chatwoot-token'];
+    
     const response = await axios.post(
-      `https://chat-empresta.autonomia.site/api/v1/accounts/${accountId}/conversations/${conversationId}/assignments`,
+      `${baseUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${conversationId}/assignments`,
       { assignee_id: assigneeId },
       {
         headers: {
-          'api_access_token': 'jpb8quPZo9eVYRqgReddwgmV',
+          'api_access_token': apiToken,
           'Content-Type': 'application/json'
         }
       }
@@ -420,10 +476,10 @@ async function assignConversationToAgent(accountId, conversationId, assigneeId, 
     console.log('Atribuição realizada com sucesso:', response.data);
 
     // Altera o status da conversa para 'aberta' para que apareça corretamente para o agente
-    await toggleConversationStatus(accountId, conversationId, 'open');
+    await toggleConversationStatus(chatwootAccountId, systemAccountId, conversationId, 'open');
 
     // Adiciona o gerente como participante da conversa
-    await addManagerAsParticipant(accountId, conversationId, assigneeId, chatwootDb);
+    await addManagerAsParticipant(chatwootAccountId, systemAccountId, conversationId, assigneeId, chatwootDb);
 
     return response.data;
   } catch (error) {
@@ -441,7 +497,7 @@ async function assignConversationToAgent(accountId, conversationId, assigneeId, 
  * @param {knex} chatwootDb - Conexão com o banco de dados do Chatwoot
  * @returns {Promise<object>} - Resultado da atribuição múltipla
  */
-async function assignMultipleConversations(accountId, inboxId, agentId, autoAssignmentConfig, chatwootDb) {
+async function assignMultipleConversations(chatwootAccountId, systemAccountId, inboxId, agentId, autoAssignmentConfig, chatwootDb) {
   console.log(`Verificando atribuição de múltiplas conversas para o agente ${agentId}`);
   
   try {
@@ -497,7 +553,7 @@ async function assignMultipleConversations(accountId, inboxId, agentId, autoAssi
     for (const conversation of unassignedConversations) {
       try {
         // Atribuir conversa
-        await assignConversationToAgent(accountId, conversation.display_id, agentId, chatwootDb);
+        await assignConversationToAgent(chatwootAccountId, systemAccountId, conversation.display_id, agentId, chatwootDb);
         
         // Registrar atribuição no histórico
         await registerAssignment(inboxId, agentId, conversation.contact_id);
@@ -585,13 +641,13 @@ async function getConversationDetails(chatwootDb, conversationId) {
   }
 }
 
-const assignContactToAgent = async (accountId, contactId, inboxId, conversationId) => {
-  console.log(`Iniciando processo de atribuição para conta ${accountId}, conversa ${conversationId}`);
+const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactId, inboxId, conversationId) => {
+  console.log(`Iniciando processo de atribuição para conta Chatwoot ${chatwootAccountId} (system account ${systemAccountId}), conversa ${conversationId}`);
 
   let chatwootDb = null;
   try {
     // Criar conexão com o banco de dados do Chatwoot
-    chatwootDb = await createChatwootDbConnection('empresta');
+    chatwootDb = await createChatwootDbConnection(systemAccountId);
 
     // 1. Buscar detalhes da conversa para verificar se já há um agente
     const conversationDetails = await getConversationDetails(chatwootDb, conversationId);
@@ -622,12 +678,12 @@ const assignContactToAgent = async (accountId, contactId, inboxId, conversationI
 
     // 3. Obter agentes disponíveis e online
     const inboxAgentIds = await getAvailableAgentsForInbox(chatwootDb, inboxId);
-    const onlineAgentIds = await getOnlineAgents(accountId);
+    const onlineAgentIds = await getOnlineAgents(chatwootAccountId, systemAccountId);
     const availableAgentIds = inboxAgentIds.filter(id => onlineAgentIds.includes(id));
 
     if (availableAgentIds.length === 0) {
       console.log('Nenhum agente online disponível para esta caixa de entrada. Atribuindo para o usuário padrão (1).');
-      await assignConversationToAgent(accountId, conversationId, DEFAULT_ASSIGNEE_ID, chatwootDb);
+      await assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, DEFAULT_ASSIGNEE_ID, chatwootDb);
       await registerAssignment(inboxId, DEFAULT_ASSIGNEE_ID, contactId);
       return { status: 'assigned_to_default', assigneeId: DEFAULT_ASSIGNEE_ID, reason: 'no_available_agents' };
     }
@@ -637,19 +693,20 @@ const assignContactToAgent = async (accountId, contactId, inboxId, conversationI
 
     if (!selectedAgentId) {
       console.log('Todos os agentes disponíveis atingiram o limite. Atribuindo para o usuário padrão (1).');
-      await assignConversationToAgent(accountId, conversationId, DEFAULT_ASSIGNEE_ID, chatwootDb);
+      await assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, DEFAULT_ASSIGNEE_ID, chatwootDb);
       await registerAssignment(inboxId, DEFAULT_ASSIGNEE_ID, contactId);
       return { status: 'assigned_to_default', assigneeId: DEFAULT_ASSIGNEE_ID, reason: 'agents_at_capacity' };
     }
 
     // 5. Atribuir a conversa principal (que também adicionará o gerente como participante)
-    await assignConversationToAgent(accountId, conversationId, selectedAgentId, chatwootDb);
+    await assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, selectedAgentId, chatwootDb);
     await registerAssignment(inboxId, selectedAgentId, contactId);
     console.log(`Conversa ${conversationId} atribuída com sucesso ao agente ${selectedAgentId}`);
 
     // 6. Atribuir conversas adicionais
     const multipleAssignmentResult = await assignMultipleConversations(
-      accountId,
+      chatwootAccountId,
+      systemAccountId,
       inboxId,
       selectedAgentId,
       autoAssignmentConfig.auto_assignment_config,

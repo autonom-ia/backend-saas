@@ -1,16 +1,26 @@
 const { getDbConnection } = require('../utils/database');
 
 /**
- * Lista contas filtrando por product_id
- * @param {string} productId
+ * Lista contas filtrando por product_id ou domain
+ * @param {Object} filters - Filtros de busca
+ * @param {string} [filters.productId] - ID do produto
+ * @param {string} [filters.domain] - Domínio da conta
  * @returns {Promise<Array>} Lista de contas
  */
-const getAllAccounts = async (productId) => {
+const getAllAccounts = async (filters = {}) => {
   const knex = getDbConnection();
-  return knex('account')
-    .select('*')
-    .where({ product_id: productId })
-    .orderBy('created_at', 'desc');
+  const query = knex('account').select('*');
+  
+  if (filters.productId) {
+    query.where({ product_id: filters.productId });
+  }
+  
+  if (filters.domain) {
+    query.where({ domain: filters.domain });
+  }
+  
+  // Se nenhum filtro foi fornecido, retorna todas as contas
+  return query.orderBy('created_at', 'desc');
 };
 
 /**

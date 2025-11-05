@@ -247,11 +247,20 @@ functions:
       - http:
           path: Autonomia/Saas/Accounts
           method: get
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
           request:
             parameters:
               querystrings:
-                productId: true
+                productId: false
+                domain: false
           authorizer: ${self:custom.authorizer}
 
   getAccount:

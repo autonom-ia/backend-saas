@@ -162,6 +162,35 @@ const createConversationFunnelRegister = async (registerData) => {
       }
     }
 
+    // Backfill inbox_id / conversation_id a partir do body se ausentes e persistir
+    try {
+      let us = await db('user_session')
+        .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
+        .where('id', registerData.user_session_id)
+        .first();
+
+      const updates = {};
+      if (!us?.inbox_id && registerData.chatwoot_inbox) {
+        const parsedInbox = parseInt(registerData.chatwoot_inbox, 10);
+        if (!Number.isNaN(parsedInbox)) updates.inbox_id = parsedInbox;
+      }
+      if (!us?.conversation_id && registerData.chatwoot_conversations) {
+        const parsedConv = parseInt(registerData.chatwoot_conversations, 10);
+        if (!Number.isNaN(parsedConv)) updates.conversation_id = parsedConv;
+      }
+      if (Object.keys(updates).length > 0) {
+        await db('user_session').where('id', us.id).update(updates);
+        console.log('Backfill executado para user_session:', us.id, updates);
+        // Recarregar us com valores atualizados
+        us = await db('user_session')
+          .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
+          .where('id', registerData.user_session_id)
+          .first();
+      }
+    } catch (backfillErr) {
+      console.error('Erro ao executar backfill inbox_id/conversation_id:', backfillErr);
+    }
+
     // Se assign_to_team na etapa do funil for true, chamar Autonomia/Clients/AssignContacts
     try {
       const stepId = registerData.conversation_funnel_step_id;
@@ -171,63 +200,71 @@ const createConversationFunnelRegister = async (registerData) => {
           .where('id', stepId)
           .first();
         if (step && step.assign_to_team) {
-          // Obter dados necessários a partir da user_session
-          let us = await db('user_session')
-            .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
-            .where('id', registerData.user_session_id)
-            .first();
-
-          // Backfill inbox_id / conversation_id a partir do body se ausentes e persistir
-          const updates = {};
-          if (!us?.inbox_id && registerData.chatwoot_inbox) {
-            const parsedInbox = parseInt(registerData.chatwoot_inbox, 10);
-            if (!Number.isNaN(parsedInbox)) updates.inbox_id = parsedInbox;
-          }
-          if (!us?.conversation_id && registerData.chatwoot_conversations) {
-            const parsedConv = parseInt(registerData.chatwoot_conversations, 10);
-            if (!Number.isNaN(parsedConv)) updates.conversation_id = parsedConv;
-          }
-          if (Object.keys(updates).length > 0) {
-            await db('user_session').where('id', us.id).update(updates);
-            // Recarregar us com valores atualizados
-            us = await db('user_session')
-              .select('id', 'account_id', 'contact_id', 'inbox_id', 'conversation_id')
-              .where('id', registerData.user_session_id)
-              .first();
-          }
-
           // Montar payload priorizando valores do body quando presentes
-          const accountId = registerData.chatwoot_account;
+          const chatwootAccountId = registerData.chatwoot_account;
           const inboxId = registerData.chatwoot_inbox;
           const conversationId = registerData.chatwoot_conversations;
           const contactId = registerData.chatwoot_contact;
+          
+          // Obter systemAccountId a partir do registerData
+          let systemAccountId = registerData.account_id;
+          if (!systemAccountId && registerData.user_session_id) {
+            const us = await db('user_session').select('account_id').where('id', registerData.user_session_id).first();
+            systemAccountId = us ? us.account_id : null;
+          }
 
-          if (accountId && contactId && inboxId && conversationId) {
+          if (chatwootAccountId && systemAccountId && contactId && inboxId && conversationId) {
             const payload = {
-              accountId,
+              accountId: chatwootAccountId,
+              systemAccountId,
               contactId,
               inboxId,
               conversationId,
             };
             const url = 'https://api-clients.autonomia.site/Autonomia/Clients/AssignContacts';
+            
+            // Log do request
+            console.log('[AssignContacts] REQUEST:', {
+              url,
+              method: 'POST',
+              payload
+            });
+            
             try {
               const resp = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
               });
+              
+              const responseText = await resp.text();
+              let responseData;
+              try {
+                responseData = JSON.parse(responseText);
+              } catch {
+                responseData = responseText;
+              }
+              
+              // Log do response
+              console.log('[AssignContacts] RESPONSE:', {
+                status: resp.status,
+                statusText: resp.statusText,
+                headers: Object.fromEntries(resp.headers.entries()),
+                body: responseData
+              });
+              
               if (!resp.ok) {
-                const text = await resp.text();
-                console.error('AssignContacts falhou', resp.status, text);
+                console.error('[AssignContacts] Falhou com status', resp.status, responseData);
               } else {
-                console.log('AssignContacts chamado com sucesso para conversation', conversationId);
+                console.log('[AssignContacts] Sucesso para conversation', conversationId);
               }
             } catch (httpErr) {
-              console.error('Erro HTTP ao chamar AssignContacts:', httpErr);
+              console.error('[AssignContacts] Erro HTTP:', httpErr.message, httpErr.stack);
             }
           } else {
             console.warn('Dados insuficientes para AssignContacts', {
-              accountId,
+              chatwootAccountId,
+              systemAccountId,
               contactId,
               inboxId,
               conversationId,
