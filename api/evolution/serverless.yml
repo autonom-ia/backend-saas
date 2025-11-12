@@ -131,7 +131,7 @@ functions:
           request:
             parameters:
               querystrings:
-                domain: true
+                account_id: true
                 instance: true
                 number: false
           authorizer: ${self:custom.authorizer}
@@ -147,7 +147,7 @@ functions:
           request:
             parameters:
               querystrings:
-                domain: true
+                account_id: true
                 instance: true
           authorizer: ${self:custom.authorizer}
   resendUnprocessed:

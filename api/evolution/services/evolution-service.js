@@ -83,16 +83,16 @@ async function createChatwootDbConnection(identifier) {
   }
 }
 
-async function getEvolutionConfig(domain) {
-  if (!domain) throw new Error('Domain é obrigatório');
+async function getEvolutionConfig(accountId) {
+  if (!accountId) throw new Error('account_id é obrigatório');
 
-  const cacheKey = `evo-config:${domain}`; // cache desabilitado
+  const cacheKey = `evo-config:${accountId}`; // cache desabilitado
 
   const db = getDbConnection();
-  // 1) Buscar account pelo domain
-  const account = await db('account').where({ domain }).first();
+  // 1) Buscar account pelo ID
+  const account = await db('account').where({ id: accountId }).first();
   if (!account) {
-    throw new Error(`Conta não encontrada para domain: ${domain}`);
+    throw new Error(`Conta não encontrada para account_id: ${accountId}`);
   }
 
   // 2) Buscar parâmetros da conta
@@ -115,7 +115,7 @@ async function getEvolutionConfig(domain) {
 
   if (sanitizedApiKey !== apiKey) {
     console.warn('[Evolution] apiKey sanitizado (removidos caracteres de controle) ', {
-      domain,
+      accountId,
       beforePreview: mask(apiKey),
       afterPreview: mask(sanitizedApiKey),
     });
@@ -123,15 +123,15 @@ async function getEvolutionConfig(domain) {
 
   const config = { apiUrl, apiKey: sanitizedApiKey };
   console.log('[Evolution] Config carregada', {
-    domain,
+    accountId,
     apiUrl,
     apiKeyPreview: mask(sanitizedApiKey),
   });
   return config;
 }
 
-async function getClient(domain) {
-  const { apiUrl, apiKey } = await getEvolutionConfig(domain);
+async function getClient(accountId) {
+  const { apiUrl, apiKey } = await getEvolutionConfig(accountId);
   const client = axios.create({ baseURL: apiUrl, timeout: 20000 });
   client.interceptors.request.use((config) => {
     config.headers = config.headers || {};
@@ -170,8 +170,8 @@ async function getClient(domain) {
   return client;
 }
 
-async function createInstance(domain, payload) {
-  const client = await getClient(domain);
+async function createInstance(accountId, payload) {
+  const client = await getClient(accountId);
   // Log sanitizado do payload enviado à Evolution para auditoria
   try {
     const prev = {
@@ -200,14 +200,14 @@ async function createInstance(domain, payload) {
       numberPreview: payload?.number ? String(payload.number).replace(/.(?=.{4})/g, '*') : undefined,
       tokenPreview: payload?.token ? String(payload.token).slice(0, 4) + '****' : undefined,
     };
-    console.log('[EvolutionService.createInstance] Enviando payload', { domain, url: client.defaults.baseURL + '/instance/create', payload: prev });
+    console.log('[EvolutionService.createInstance] Enviando payload', { accountId, url: client.defaults.baseURL + '/instance/create', payload: prev });
   } catch {}
   const { data } = await client.post('/instance/create', payload);
   return data;
 }
 
-async function setChatwoot(domain, instance, payload) {
-  const client = await getClient(domain);
+async function setChatwoot(accountId, instance, payload) {
+  const client = await getClient(accountId);
   try {
     const prev = {
       ...payload,
@@ -233,26 +233,26 @@ async function setChatwoot(domain, instance, payload) {
   }
 }
 
-async function connect(domain, instance, number) {
-  const client = await getClient(domain);
+async function connect(accountId, instance, number) {
+  const client = await getClient(accountId);
   const params = {};
   if (number) params.number = number;
   const { data } = await client.get(`/instance/connect/${encodeURIComponent(instance)}`, { params });
   return data; // { pairingCode, code, count }
 }
 
-async function connectionState(domain, instance) {
-  const client = await getClient(domain);
+async function connectionState(accountId, instance) {
+  const client = await getClient(accountId);
   const path = `/instance/connectionState/${encodeURIComponent(instance)}`;
-  console.log('[Evolution] Chamando connectionState', { domain, instance, path });
+  console.log('[Evolution] Chamando connectionState', { accountId, instance, path });
   const { data } = await client.get(path);
   return data; // { instance: { instanceName, state } }
 }
 
-async function deleteInstance(domain, instance) {
-  const client = await getClient(domain);
+async function deleteInstance(accountId, instance) {
+  const client = await getClient(accountId);
   const path = `/instance/delete/${encodeURIComponent(instance)}`;
-  console.log('[Evolution] Deletando instância', { domain, instance, path });
+  console.log('[Evolution] Deletando instância', { accountId, instance, path });
   const { data } = await client.delete(path);
   return data;
 }
@@ -260,11 +260,11 @@ async function deleteInstance(domain, instance) {
 module.exports = { createInstance, setChatwoot, connect, connectionState, deleteInstance };
 
 // ================= Chatwoot Provisioning =================
-async function provisionChatwoot(domain) {
+async function provisionChatwoot(accountId) {
   // Busca account e parâmetros
   const db = getDbConnection();
-  const account = await db('account').where({ domain }).first();
-  if (!account) throw new Error(`Conta não encontrada para domain: ${domain}`);
+  const account = await db('account').where({ id: accountId }).first();
+  if (!account) throw new Error(`Conta não encontrada para account_id: ${accountId}`);
   const paramsRows = await db('account_parameter')
     .where('account_id', account.id)
     .select('name', 'value');
@@ -285,7 +285,7 @@ async function provisionChatwoot(domain) {
   const platformToken = String(platformTokenRaw).replace(/[\r\n\t\v\f]/g, '').trim();
   if (platformToken !== platformTokenRaw) {
     console.warn('[Chatwoot] platform token sanitizado (removidos caracteres de controle)', {
-      domain,
+      accountId,
       beforePreview: mask(platformTokenRaw),
       afterPreview: mask(platformToken),
     });
@@ -295,7 +295,7 @@ async function provisionChatwoot(domain) {
   const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: platformToken } });
   // Para endpoints de conta (não plataforma), utilizar chatwootToken da conta
   const cwAccount = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: String(chatwootToken).trim() } });
-  console.log('[Chatwoot] Provision start', { domain, url: chatwootUrl, tokenPreview: mask(chatwootToken), platformTokenPreview: mask(platformToken) });
+  console.log('[Chatwoot] Provision start', { accountId, url: chatwootUrl, tokenPreview: mask(chatwootToken), platformTokenPreview: mask(platformToken) });
 
   // 1) Reutilizar conta existente se já houver parâmetro chatwoot-account; caso contrário, criar
   let chatwootAccountId = params['chatwoot-account'] || params['CHATWOOT_ACCOUNT'];
@@ -304,7 +304,7 @@ async function provisionChatwoot(domain) {
       const path = `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`;
       // Log detalhado da requisição de verificação (rota não plataforma)
       console.log('[Chatwoot] Verificando existência de conta (API)', {
-        domain,
+        accountId,
         chatwootAccountId: String(chatwootAccountId).trim(),
         request: {
           method: 'GET',
@@ -372,7 +372,7 @@ async function provisionChatwoot(domain) {
     console.warn('[Chatwoot] Falha ao associar user_id=1', { chatwootAccountId, error: e?.message || e });
   }
 
-  console.log('[Chatwoot] Provisioned', { domain, chatwootAccountId });
+  console.log('[Chatwoot] Provisioned', { accountId, chatwootAccountId });
   return { chatwootAccountId, chatwootToken: String(chatwootToken).trim(), chatwootUrl };
 }
 
@@ -381,17 +381,17 @@ module.exports.provisionChatwoot = provisionChatwoot;
 // ================= Chatwoot post-instance configuration =================
 /**
  * Cria Agent Bot, associa à Inbox e salva parâmetro chatwoot-inbox.
- * @param {string} domain
+ * @param {string} accountId
  * @param {string} instanceName Nome da instância (usado como nome da inbox)
  */
-async function configureChatwootInbox(domain, instanceName) {
+async function configureChatwootInbox(accountId, instanceName) {
   const db = getDbConnection();
-  if (!domain) throw new Error('Domain é obrigatório');
+  if (!accountId) throw new Error('account_id é obrigatório');
   if (!instanceName) throw new Error('instanceName é obrigatório');
 
   // Buscar account e parâmetros
-  const account = await db('account').where({ domain }).first();
-  if (!account) throw new Error(`Conta não encontrada para domain: ${domain}`);
+  const account = await db('account').where({ id: accountId }).first();
+  if (!account) throw new Error(`Conta não encontrada para account_id: ${accountId}`);
   const paramsRows = await db('account_parameter')
     .where('account_id', account.id)
     .select('name', 'value');
@@ -507,7 +507,7 @@ async function configureChatwootInbox(domain, instanceName) {
     await db('account_parameter').insert({ account_id: account.id, name: 'chatwoot-inbox', value: String(inboxId) });
   }
 
-  console.log('[Chatwoot] Agent Bot criado e associado à inbox', { domain, chatwootAccountId, botId, inboxId, instanceName });
+  console.log('[Chatwoot] Agent Bot criado e associado à inbox', { accountId, chatwootAccountId, botId, inboxId, instanceName });
   return { botId, inboxId };
 }
 

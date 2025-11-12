@@ -376,6 +376,23 @@ const getProductAccountbyAccountPhone = async (accountPhone) => {
       .where('phone', accountPhone)
       .select('*');
 
+    // 1.1. Se não encontrar na tabela account, tentar buscar no inbox
+    if (!accounts || accounts.length === 0) {
+      console.log(`Nenhuma conta encontrada pelo phone. Tentando buscar inbox pelo nome: ${accountPhone}`);
+      const inbox = await db('inbox')
+        .where('name', accountPhone)
+        .select('account_id')
+        .first();
+
+      if (inbox && inbox.account_id) {
+        // Se encontrou no inbox, busca a conta pelo ID
+        console.log(`Inbox encontrado. Buscando conta pelo account_id: ${inbox.account_id}`);
+        accounts = await db('account')
+          .where('id', inbox.account_id)
+          .select('*');
+      }
+    }
+
     if (!accounts || accounts.length === 0) {
       console.log(`Nenhuma conta encontrada para accountPhone: ${accountPhone}`);
       return {
