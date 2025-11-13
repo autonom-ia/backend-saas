@@ -7,8 +7,11 @@ const { parsePhoneNumber, isValidPhoneNumber } = require('libphonenumber-js');
  * @returns {Object} { isValid: boolean, normalizedPhone: string, error?: string }
  */
 const normalizePhone = (phone, defaultCountry = 'BR') => {
+  console.log('[PHONE-NORMALIZER] Input:', { phone, defaultCountry, type: typeof phone });
+  
   try {
     if (!phone || typeof phone !== 'string') {
+      console.log('[PHONE-NORMALIZER] Telefone inválido ou não string');
       return {
         isValid: false,
         normalizedPhone: null,
@@ -18,8 +21,10 @@ const normalizePhone = (phone, defaultCountry = 'BR') => {
 
     // Remove caracteres não numéricos exceto +
     const cleanPhone = phone.replace(/[^\d+]/g, '');
+    console.log('[PHONE-NORMALIZER] Telefone limpo:', cleanPhone);
     
     if (!cleanPhone) {
+      console.log('[PHONE-NORMALIZER] Telefone vazio após limpeza');
       return {
         isValid: false,
         normalizedPhone: null,
@@ -28,7 +33,10 @@ const normalizePhone = (phone, defaultCountry = 'BR') => {
     }
 
     // Verifica se é um número válido
-    if (!isValidPhoneNumber(cleanPhone, defaultCountry)) {
+    const isValid = isValidPhoneNumber(cleanPhone, defaultCountry);
+    console.log('[PHONE-NORMALIZER] Validação libphonenumber:', { cleanPhone, isValid });
+    
+    if (!isValid) {
       return {
         isValid: false,
         normalizedPhone: null,
@@ -38,13 +46,16 @@ const normalizePhone = (phone, defaultCountry = 'BR') => {
 
     // Parse e normaliza
     const phoneNumber = parsePhoneNumber(cleanPhone, defaultCountry);
+    const normalized = phoneNumber.format('E.164');
+    console.log('[PHONE-NORMALIZER] Normalizado com sucesso:', normalized);
     
     return {
       isValid: true,
-      normalizedPhone: phoneNumber.format('E.164'),
+      normalizedPhone: normalized,
       error: null
     };
   } catch (error) {
+    console.error('[PHONE-NORMALIZER] Erro:', error.message);
     return {
       isValid: false,
       normalizedPhone: null,

@@ -13,28 +13,22 @@ const { withCors } = require('../utils/cors');
 /**
  * Valida se o arquivo é do tipo permitido
  * @param {string} filename - Nome do arquivo
- * @param {string} mimetype - Tipo MIME
  * @returns {boolean}
  */
-const isValidFileType = (filename, mimetype) => {
-  const allowedMimes = [
-    'text/csv',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel'
-  ];
-  
+const isValidFileType = (filename) => {
   const allowedExtensions = ['.csv', '.xlsx', '.xls'];
-  
-  return allowedMimes.includes(mimetype) || 
-         allowedExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+  return allowedExtensions.some(ext => filename.toLowerCase().endsWith(ext));
 };
 
 /**
  * Handler para upload de contatos de campanha
+ * Recebe JSON com arquivo em base64 (padrão do projeto)
  */
 const uploadContactsHandler = withCors(async (event, context) => {
   try {
+    console.log('[UPLOAD] Iniciando processo de upload de contatos');
     const campaignId = event.pathParameters?.campaignId;
+    console.log('[UPLOAD] Campaign ID:', campaignId);
     
     if (!campaignId) {
       return errorResponse({ 
@@ -43,37 +37,32 @@ const uploadContactsHandler = withCors(async (event, context) => {
       }, 400, event);
     }
 
-    // Parse do body multipart/form-data
-    const body = event.body;
-    const boundary = event.headers['content-type']?.split('boundary=')[1];
+    // Parse JSON body
+    const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    console.log('[UPLOAD] Body recebido:', {
+      hasFile: !!body?.file,
+      filename: body?.filename,
+      fileSize: body?.file?.length || 0,
+      accountId: body?.accountId,
+      sendMessages: body?.sendMessages
+    });
     
-    if (!body || !boundary) {
+    if (!body || !body.file || !body.filename) {
       return errorResponse({ 
         success: false, 
-        message: 'Arquivo não enviado' 
+        message: 'Arquivo e nome do arquivo são obrigatórios' 
       }, 400, event);
     }
 
-    // Extrair dados do form-data
-    const formData = parseMultipartFormData(body, boundary);
-    
-    if (!formData.file) {
-      return errorResponse({ 
-        success: false, 
-        message: 'Arquivo é obrigatório' 
-      }, 400, event);
-    }
+    const { file: base64Content, filename, accountId, sendMessages = false } = body;
 
     // Validar tipo de arquivo
-    if (!isValidFileType(formData.file.filename, formData.file.mimetype)) {
+    if (!isValidFileType(filename)) {
       return errorResponse({ 
         success: false, 
-        message: 'Formato de arquivo não suportado. Use CSV ou XLSX.' 
+        message: 'Formato de arquivo não suportado. Use CSV, XLSX ou XLS.' 
       }, 400, event);
     }
-
-    const accountId = formData.accountId;
-    const sendMessages = formData.sendMessages === 'true';
 
     if (!accountId) {
       return errorResponse({ 
@@ -83,23 +72,56 @@ const uploadContactsHandler = withCors(async (event, context) => {
     }
 
     // Verificar se a campanha existe e pertence à conta
+    console.log('[UPLOAD] Verificando campanha:', { campaignId, accountId });
     const campaign = await getCampaignById(campaignId, accountId);
+    console.log('[UPLOAD] Campanha encontrada:', campaign.name);
 
-    // Salvar arquivo temporário
-    const tempFilePath = `/tmp/${Date.now()}_${formData.file.filename}`;
-    fs.writeFileSync(tempFilePath, formData.file.content);
+    // Decodificar base64 e salvar arquivo temporário
+    console.log('[UPLOAD] Decodificando arquivo base64...');
+    const fileBuffer = Buffer.from(base64Content, 'base64');
+    console.log('[UPLOAD] Arquivo decodificado:', fileBuffer.length, 'bytes');
+    const tempFilePath = `/tmp/${Date.now()}_${filename}`;
+    fs.writeFileSync(tempFilePath, fileBuffer);
+    console.log('[UPLOAD] Arquivo salvo em:', tempFilePath);
 
     try {
+      // Determinar mimetype pelo filename
+      const ext = filename.toLowerCase().split('.').pop();
+      const mimetypeMap = {
+        'csv': 'text/csv',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'xls': 'application/vnd.ms-excel'
+      };
+      const mimetype = mimetypeMap[ext] || 'application/octet-stream';
+      
       // Processar arquivo
-      const parsed = await processContactFile(tempFilePath, formData.file.mimetype);
+      console.log('[UPLOAD] Processando arquivo:', { mimetype, ext });
+      const parsed = await processContactFile(tempFilePath, mimetype);
+      console.log('[UPLOAD] Arquivo processado:', {
+        totalRows: parsed.data.length,
+        mapping: parsed.mapping,
+        firstRow: parsed.data[0]
+      });
       
       // Validar e normalizar contatos
       const validatedContacts = [];
       const validationErrors = [];
 
+      console.log('[UPLOAD] Iniciando validação de', parsed.data.length, 'linhas');
       parsed.data.forEach((row, index) => {
         const lineNumber = index + 2; // +2 porque index começa em 0 e linha 1 é header
         const validation = validateAndNormalizeContact(row, parsed.mapping, lineNumber);
+        
+        if (index < 3) { // Log das primeiras 3 linhas
+          console.log(`[UPLOAD] Linha ${lineNumber}:`, {
+            raw: row,
+            validation: {
+              isValid: validation.isValid,
+              errors: validation.errors,
+              normalizedPhone: validation.normalizedPhone
+            }
+          });
+        }
         
         if (validation.isValid) {
           validatedContacts.push(validation);
@@ -109,6 +131,10 @@ const uploadContactsHandler = withCors(async (event, context) => {
             errors: validation.errors
           });
         }
+      });
+      console.log('[UPLOAD] Validação concluída:', {
+        valid: validatedContacts.length,
+        invalid: validationErrors.length
       });
 
       if (validatedContacts.length === 0) {
@@ -120,7 +146,9 @@ const uploadContactsHandler = withCors(async (event, context) => {
       }
 
       // Salvar contatos no banco
+      console.log('[UPLOAD] Salvando', validatedContacts.length, 'contatos no banco...');
       const saveResult = await saveContacts(validatedContacts, campaignId, accountId);
+      console.log('[UPLOAD] Resultado do salvamento:', saveResult);
       
       // Combinar erros de validação
       const allErrors = [
@@ -170,58 +198,6 @@ const uploadContactsHandler = withCors(async (event, context) => {
     }, 500, event);
   }
 });
-
-/**
- * Parse simples de multipart/form-data
- * @param {string} body - Body da requisição
- * @param {string} boundary - Boundary do multipart
- * @returns {Object} Dados parseados
- */
-function parseMultipartFormData(body, boundary) {
-  const result = {};
-  const parts = body.split(`--${boundary}`);
-  
-  for (const part of parts) {
-    if (part.includes('Content-Disposition')) {
-      const lines = part.split('\r\n');
-      const dispositionLine = lines.find(line => line.includes('Content-Disposition'));
-      
-      if (dispositionLine) {
-        const nameMatch = dispositionLine.match(/name="([^"]+)"/);
-        const filenameMatch = dispositionLine.match(/filename="([^"]+)"/);
-        
-        if (nameMatch) {
-          const fieldName = nameMatch[1];
-          
-          if (filenameMatch) {
-            // É um arquivo
-            const filename = filenameMatch[1];
-            const contentTypeIndex = lines.findIndex(line => line.includes('Content-Type'));
-            const mimetype = contentTypeIndex >= 0 ? 
-              lines[contentTypeIndex].split(':')[1].trim() : 
-              'application/octet-stream';
-            
-            const contentStartIndex = lines.findIndex(line => line === '') + 1;
-            const content = Buffer.from(lines.slice(contentStartIndex).join('\r\n'), 'binary');
-            
-            result[fieldName] = {
-              filename,
-              mimetype,
-              content
-            };
-          } else {
-            // É um campo de texto
-            const contentStartIndex = lines.findIndex(line => line === '') + 1;
-            const value = lines.slice(contentStartIndex).join('\r\n').trim();
-            result[fieldName] = value;
-          }
-        }
-      }
-    }
-  }
-  
-  return result;
-}
 
 module.exports = {
   handler: uploadContactsHandler

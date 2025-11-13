@@ -8,6 +8,8 @@ const fs = require('fs');
  * @returns {Object} Mapeamento de colunas
  */
 const detectColumns = (headers) => {
+  console.log('[FILE-PARSER] Detectando colunas - Headers recebidos:', headers);
+  
   const mapping = {
     name: null,
     phone: null,
@@ -16,6 +18,7 @@ const detectColumns = (headers) => {
   };
 
   const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  console.log('[FILE-PARSER] Headers normalizados:', lowerHeaders);
 
   // Detectar coluna de nome
   const namePatterns = ['nome', 'name', 'cliente', 'contato'];
@@ -23,6 +26,7 @@ const detectColumns = (headers) => {
     const index = lowerHeaders.findIndex(h => h.includes(pattern));
     if (index !== -1) {
       mapping.name = headers[index];
+      console.log(`[FILE-PARSER] Coluna NOME detectada: "${headers[index]}" (padrão: "${pattern}")`);
       break;
     }
   }
@@ -33,6 +37,7 @@ const detectColumns = (headers) => {
     const index = lowerHeaders.findIndex(h => h.includes(pattern));
     if (index !== -1) {
       mapping.phone = headers[index];
+      console.log(`[FILE-PARSER] Coluna TELEFONE detectada: "${headers[index]}" (padrão: "${pattern}")`);
       break;
     }
   }
@@ -43,6 +48,7 @@ const detectColumns = (headers) => {
     const index = lowerHeaders.findIndex(h => h.includes(pattern));
     if (index !== -1) {
       mapping.cpf = headers[index];
+      console.log(`[FILE-PARSER] Coluna CPF detectada: "${headers[index]}" (padrão: "${pattern}")`);
       break;
     }
   }
@@ -54,6 +60,13 @@ const detectColumns = (headers) => {
     }
   });
 
+  console.log('[FILE-PARSER] Mapeamento final:', {
+    name: mapping.name,
+    phone: mapping.phone,
+    cpf: mapping.cpf,
+    others: mapping.others
+  });
+
   return mapping;
 };
 
@@ -63,19 +76,29 @@ const detectColumns = (headers) => {
  * @returns {Promise<Object>} { headers, data, mapping }
  */
 const parseCsv = (filePath) => {
+  console.log('[FILE-PARSER] Iniciando parse de CSV:', filePath);
   return new Promise((resolve, reject) => {
     const results = [];
     let headers = [];
 
     fs.createReadStream(filePath)
-      .pipe(csv())
+      .pipe(csv({
+        separator: ';',  // Usar ponto e vírgula como separador padrão (Excel BR)
+        skipEmptyLines: true,
+        trim: true
+      }))
       .on('headers', (headerList) => {
         headers = headerList;
+        console.log('[FILE-PARSER] CSV headers detectados:', headers);
       })
       .on('data', (data) => {
+        if (results.length < 2) {
+          console.log(`[FILE-PARSER] CSV linha ${results.length + 1}:`, data);
+        }
         results.push(data);
       })
       .on('end', () => {
+        console.log(`[FILE-PARSER] CSV parse concluído: ${results.length} linhas`);
         const mapping = detectColumns(headers);
         resolve({
           headers,
@@ -84,6 +107,7 @@ const parseCsv = (filePath) => {
         });
       })
       .on('error', (error) => {
+        console.error('[FILE-PARSER] Erro ao fazer parse do CSV:', error);
         reject(error);
       });
   });
@@ -96,19 +120,23 @@ const parseCsv = (filePath) => {
  */
 const parseXlsx = (filePath) => {
   try {
+    console.log('[FILE-PARSER] Iniciando parse de XLSX:', filePath);
     const workbook = XLSX.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
+    console.log('[FILE-PARSER] XLSX sheet:', sheetName);
     const worksheet = workbook.Sheets[sheetName];
     
     // Converter para JSON
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    console.log(`[FILE-PARSER] XLSX total de linhas (incluindo header): ${jsonData.length}`);
     
     if (jsonData.length === 0) {
       throw new Error('Arquivo está vazio');
     }
 
     const headers = jsonData[0];
-    const data = jsonData.slice(1).map(row => {
+    console.log('[FILE-PARSER] XLSX headers:', headers);
+    const data = jsonData.slice(1).map((row, idx) => {
       const obj = {};
       headers.forEach((header, index) => {
         obj[header] = row[index] || '';

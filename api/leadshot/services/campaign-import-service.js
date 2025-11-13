@@ -70,6 +70,12 @@ const processContactFile = async (filePath, mimeType) => {
  * @returns {Object} Dados validados e normalizados
  */
 const validateAndNormalizeContact = (row, mapping, lineNumber) => {
+  console.log(`[VALIDATE] Linha ${lineNumber} - Dados recebidos:`, {
+    mappedColumns: Object.keys(mapping),
+    rowColumns: Object.keys(row),
+    rawData: row
+  });
+
   const errors = [];
   const contact = {
     name: null,
@@ -80,6 +86,7 @@ const validateAndNormalizeContact = (row, mapping, lineNumber) => {
 
   // Validar nome
   const name = row[mapping.name]?.toString().trim();
+  console.log(`[VALIDATE] Linha ${lineNumber} - Nome:`, { column: mapping.name, rawValue: row[mapping.name], trimmed: name });
   if (!name) {
     errors.push(`Nome é obrigatório`);
   } else {
@@ -88,10 +95,12 @@ const validateAndNormalizeContact = (row, mapping, lineNumber) => {
 
   // Validar e normalizar telefone
   const phoneValue = row[mapping.phone]?.toString().trim();
+  console.log(`[VALIDATE] Linha ${lineNumber} - Telefone:`, { column: mapping.phone, rawValue: row[mapping.phone], trimmed: phoneValue });
   if (!phoneValue) {
     errors.push(`Telefone é obrigatório`);
   } else {
     const phoneValidation = normalizePhone(phoneValue);
+    console.log(`[VALIDATE] Linha ${lineNumber} - Validação telefone:`, phoneValidation);
     if (!phoneValidation.isValid) {
       errors.push(`Telefone inválido: ${phoneValidation.error}`);
     } else {
@@ -101,10 +110,12 @@ const validateAndNormalizeContact = (row, mapping, lineNumber) => {
 
   // Validar CPF
   const cpfValue = row[mapping.cpf]?.toString().trim();
+  console.log(`[VALIDATE] Linha ${lineNumber} - CPF:`, { column: mapping.cpf, rawValue: row[mapping.cpf], trimmed: cpfValue });
   if (!cpfValue) {
     errors.push(`CPF é obrigatório`);
   } else {
     const cpfValidation = validateCpf(cpfValue);
+    console.log(`[VALIDATE] Linha ${lineNumber} - Validação CPF:`, cpfValidation);
     if (!cpfValidation.isValid) {
       errors.push(`CPF inválido: ${cpfValidation.error}`);
     } else {
@@ -114,6 +125,7 @@ const validateAndNormalizeContact = (row, mapping, lineNumber) => {
   }
 
   // Adicionar outras colunas ao contact_data
+  console.log(`[VALIDATE] Linha ${lineNumber} - Outras colunas:`, mapping.others);
   mapping.others.forEach(column => {
     const value = row[column]?.toString().trim();
     if (value) {
@@ -121,11 +133,18 @@ const validateAndNormalizeContact = (row, mapping, lineNumber) => {
     }
   });
 
+  console.log(`[VALIDATE] Linha ${lineNumber} - Resultado:`, {
+    isValid: errors.length === 0,
+    errors,
+    contact
+  });
+
   return {
     isValid: errors.length === 0,
     contact,
     errors,
-    lineNumber
+    lineNumber,
+    normalizedPhone: contact.phone
   };
 };
 
