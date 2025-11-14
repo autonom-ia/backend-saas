@@ -8,18 +8,18 @@ exports.handler = async (event) => {
   try {
     const origin = getOrigin(event);
     const qs = event.queryStringParameters || {};
-    const { instance, number, domain: qsDomain } = qs;
+    const { instance, number, account_id: qsAccountId } = qs;
     const body = JSON.parse(event.body || '{}');
-    const domain = qsDomain || body.domain;
+    const accountId = qsAccountId || body.account_id;
 
     if (!instance) {
       return createResponse(400, { message: 'Parâmetro instance é obrigatório' }, origin);
     }
-    if (!domain) {
-      return createResponse(400, { message: 'domain é obrigatório' }, origin);
+    if (!accountId) {
+      return createResponse(400, { message: 'account_id é obrigatório' }, origin);
     }
 
-    const result = await connect(domain, instance, number);
+    const result = await connect(accountId, instance, number);
     return createResponse(200, result, origin);
   } catch (err) {
     console.error('Erro em Connect:', err);

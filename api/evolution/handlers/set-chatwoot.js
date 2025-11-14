@@ -12,15 +12,15 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || '{}');
     const qs = event.queryStringParameters || {};
     const path = event.pathParameters || {};
-    const domain = body.domain || qs.domain;
+    const accountId = body.account_id || qs.account_id;
 
     // instance pode vir na URL (/chatwoot/set/{instance}) ou no body.instanceName
     const instance = path.instance || body.instanceName || body.instance || qs.instance;
     if (!instance) {
       return createResponse(400, { message: 'Parâmetro instance é obrigatório (path ou body.instanceName).' }, origin);
     }
-    if (!domain) {
-      return createResponse(400, { message: 'domain é obrigatório' }, origin);
+    if (!accountId) {
+      return createResponse(400, { message: 'account_id é obrigatório' }, origin);
     }
 
     // Apenas os campos suportados pelo endpoint da Evolution (conforme cURL)
@@ -81,7 +81,7 @@ exports.handler = async (event) => {
     // Se account_id NÃO foi enviado, provisionar Chatwoot para a conta e preencher os campos obrigatórios
     if (!Object.prototype.hasOwnProperty.call(payload, 'account_id')) {
       try {
-        const prov = await provisionChatwoot(domain);
+        const prov = await provisionChatwoot(accountId);
         payload.account_id = prov.chatwootAccountId;
         if (!payload.url) payload.url = prov.chatwootUrl;
         if (!payload.token) payload.token = prov.chatwootToken;
@@ -100,7 +100,7 @@ exports.handler = async (event) => {
     // Persistimos após possível provisionamento para garantir consistência
     try {
       const db = getDbConnection();
-      const account = await db('account').where({ domain }).first();
+      const account = await db('account').where({ id: accountId }).first();
       if (account) {
         const upsert = async (name, value) => {
           if (value === undefined || value === null || value === '') return;
@@ -133,7 +133,7 @@ exports.handler = async (event) => {
     try {
       const preview = {
         instance,
-        domain,
+        accountId,
         body: {
           enabled: payload.enabled,
           url: payload.url,
@@ -176,7 +176,7 @@ exports.handler = async (event) => {
     })();
     let result;
     try {
-      result = await setChatwoot(domain, instance, evoPayload);
+      result = await setChatwoot(accountId, instance, evoPayload);
     } catch (e) {
       const status = e?.response?.status || 400;
       const data = e?.response?.data;
@@ -188,7 +188,7 @@ exports.handler = async (event) => {
     // Configurar Agent Bot e Inbox no Chatwoot (atualiza feature_flags e seta bot/inbox)
     let cfg;
     try {
-      cfg = await configureChatwootInbox(domain, String(instance));
+      cfg = await configureChatwootInbox(accountId, String(instance));
     } catch (cfgErr) {
       console.warn('[set-chatwoot] Falha ao configurar Agent Bot/Inbox', cfgErr?.message || cfgErr);
     }

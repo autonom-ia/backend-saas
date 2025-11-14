@@ -4,8 +4,9 @@
   "description": "Serviço Leadshot para disparos de mensagens e memória de chat.",
   "main": "index.js",
   "scripts": {
+    "predeploy": "npm install --production",
     "deploy": "serverless deploy --stage prod",
-    "deploy:prod": "serverless deploy --stage prod",
+    "deploy:prod": "npm install --production && serverless deploy --stage prod",
     "create:domain": "serverless create_domain --stage prod"
   },
   "dependencies": {},

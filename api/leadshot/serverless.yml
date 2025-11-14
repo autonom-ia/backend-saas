@@ -25,11 +25,6 @@ layers:
     name: ${self:service}-${self:provider.stage}-common
     compatibleRuntimes:
       - nodejs18.x
-    package:
-      include:
-        - node_modules/pg/**
-        - node_modules/knex/**
-        - node_modules/ioredis/**
 
 package:
   individually: true
@@ -52,6 +47,8 @@ provider:
   region: us-east-1
   memorySize: 512
   timeout: 30
+  layers:
+    - { Ref: CommonLibsLambdaLayer }
   vpc:
     securityGroupIds:
       - 'sg-0e9189ca9e6d0427d'
@@ -93,8 +90,6 @@ functions:
   # Template Message
   listTemplateMessages:
     handler: handlers/list-template-messages.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages
@@ -108,8 +103,6 @@ functions:
 
   getTemplateMessage:
     handler: handlers/get-template-message.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages/{templateMessageId}
@@ -123,8 +116,6 @@ functions:
 
   createTemplateMessage:
     handler: handlers/create-template-message.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages
@@ -134,8 +125,6 @@ functions:
 
   updateTemplateMessage:
     handler: handlers/update-template-message.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/TemplateMessages/{templateMessageId}
@@ -150,8 +139,6 @@ functions:
   # Message Logs
   createMessageLog:
     handler: handlers/create-message-log.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/MessageLogs
@@ -162,8 +149,6 @@ functions:
   # Chat Memory
   createChatMemory:
     handler: handlers/create-chat-memory.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/ChatMemory
@@ -174,8 +159,6 @@ functions:
   # Campaigns
   listCampaigns:
     handler: handlers/list-campaigns.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/Campaigns
@@ -188,11 +171,95 @@ functions:
           authorizer: ${self:custom.authorizer}
   createCampaign:
     handler: handlers/create-campaign.handler
-    layers:
-      - { Ref: CommonLibsLambdaLayer }
     events:
       - http:
           path: Autonomia/Leadshot/Campaigns
           method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
+          authorizer: ${self:custom.authorizer}
+
+  # Campaign Contact Import System
+  uploadCampaignContacts:
+    handler: handlers/upload-campaign-contacts.handler
+    timeout: 60
+    events:
+      - http:
+          path: Autonomia/Leadshot/Campaigns/{campaignId}/contacts/upload
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
+          request:
+            parameters:
+              paths:
+                campaignId: true
+          authorizer: ${self:custom.authorizer}
+
+  listCampaignContacts:
+    handler: handlers/list-campaign-contacts.handler
+    events:
+      - http:
+          path: Autonomia/Leadshot/Campaigns/{campaignId}/contacts
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
+          request:
+            parameters:
+              paths:
+                campaignId: true
+              querystrings:
+                status: false
+                limit: false
+                offset: false
+          authorizer: ${self:custom.authorizer}
+
+  updateContactStatus:
+    handler: handlers/update-contact-status.handler
+    events:
+      - http:
+          path: Autonomia/Leadshot/Contacts/{contactId}/status
+          method: put
           cors: true
+          request:
+            parameters:
+              paths:
+                contactId: true
+          authorizer: ${self:custom.authorizer}
+
+  sendCampaignMessages:
+    handler: handlers/send-campaign-messages.handler
+    timeout: 60
+    events:
+      - http:
+          path: Autonomia/Leadshot/Campaigns/{campaignId}/send
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                campaignId: true
+              querystrings:
+                status: false
+                limit: false
           authorizer: ${self:custom.authorizer}

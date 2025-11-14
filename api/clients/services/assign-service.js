@@ -623,23 +623,6 @@ async function registerAssignment(inboxId, userId, contactId) {
  * @param {number} conversationId - ID da conversa
  * @returns {Promise<object>} - Resultado da atribuição
  */
-/**
- * Busca os detalhes de uma conversa específica no banco de dados do Chatwoot.
- * @param {object} chatwootDb - Conexão Knex com o banco de dados.
- * @param {number} conversationId - ID da conversa.
- * @returns {Promise<object>} - Dados da conversa.
- */
-async function getConversationDetails(chatwootDb, conversationId) {
-  try {
-    const conversation = await chatwootDb('conversations')
-      .where({ display_id: conversationId })
-      .first();
-    return conversation;
-  } catch (error) {
-    console.error(`Erro ao buscar detalhes da conversa ${conversationId} no banco de dados:`, error.message);
-    throw new Error(`Não foi possível obter detalhes da conversa ${conversationId} do banco de dados.`);
-  }
-}
 
 const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactId, inboxId, conversationId) => {
   console.log(`Iniciando processo de atribuição para conta Chatwoot ${chatwootAccountId} (system account ${systemAccountId}), conversa ${conversationId}`);
@@ -649,22 +632,64 @@ const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactI
     // Criar conexão com o banco de dados do Chatwoot
     chatwootDb = await createChatwootDbConnection(systemAccountId);
 
-    // 1. Buscar detalhes da conversa para verificar se já há um agente
-    const conversationDetails = await getConversationDetails(chatwootDb, conversationId);
-    if (!conversationDetails) {
-      console.log(`Conversa com ID ${conversationId} não encontrada.`);
-      return { status: 'error', reason: 'conversation_not_found' };
+    // 1. Buscar detalhes da conversa com lock pessimista (SELECT FOR UPDATE NOWAIT) para evitar race conditions
+    let conversationDetails;
+    try {
+      conversationDetails = await chatwootDb.transaction(async (trx) => {
+        const conversation = await trx('conversations')
+          .where({ display_id: conversationId })
+          .forUpdate()
+          .noWait() // Falha imediatamente se já houver lock ativo - evita espera desnecessária
+          .first();
+        
+        if (!conversation) {
+          throw new Error('conversation_not_found');
+        }
+        
+        // Verificar se já possui atendente DENTRO da transação
+        if (conversation.assignee_id) {
+          console.log(`Conversa ${conversationId} já possui atendente (ID: ${conversation.assignee_id}). Pulando.`);
+          throw new Error(`already_assigned:${conversation.assignee_id}`);
+        }
+        
+        return conversation;
+      });
+    } catch (lockError) {
+      // Tratar erro de lock NOWAIT imediatamente
+      if (lockError.code === '55P03' || lockError.message.includes('could not obtain lock')) {
+        console.log(`⚠️ NOWAIT LOCK: Conversa ${conversationId} está bloqueada por outra requisição simultânea. Não foi possível atribuir (race condition detectada e prevenida).`);
+        return {
+          status: 'skipped',
+          reason: 'conversation_locked_by_another_process'
+        };
+      }
+      
+      // Tratar erro de conversa já atribuída (não é um erro fatal, é esperado)
+      if (lockError.message.startsWith('already_assigned:')) {
+        const assigneeId = parseInt(lockError.message.split(':')[1], 10);
+        console.log(`ℹ️ Conversa ${conversationId} já possui atendente (ID: ${assigneeId}). Atribuição não necessária.`);
+        return {
+          status: 'skipped',
+          reason: 'already_assigned',
+          assigneeId: assigneeId
+        };
+      }
+      
+      // Tratar erro de conversa não encontrada
+      if (lockError.message === 'conversation_not_found') {
+        console.log(`❌ Conversa ${conversationId} não encontrada no banco de dados.`);
+        return { 
+          status: 'error', 
+          reason: 'conversation_not_found' 
+        };
+      }
+      
+      // Re-lançar outros erros da transação
+      throw lockError;
     }
 
-    const assigneeId = conversationDetails.assignee_id;
-    if (assigneeId) {
-      console.log(`Conversa ${conversationId} já possui atendente (ID: ${assigneeId}). Pulando.`);
-      return {
-        status: 'skipped',
-        reason: 'already_assigned',
-        assigneeId: assigneeId
-      };
-    }
+    // Se chegou aqui, a conversa foi lockada e não tem assignee
+    console.log(`Conversa ${conversationId} disponível para atribuição (sem assignee).`);
 
     // 2. Verificar se a atribuição automática está desabilitada para esta caixa de entrada
     const autoAssignmentConfig = await isAutoAssignmentDisabled(chatwootDb, inboxId);
@@ -721,8 +746,8 @@ const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactI
     };
 
   } catch (error) {
-    console.error('Erro fatal durante o processo de atribuição:', error);
-    throw error; // Re-lança o erro para ser tratado pelo handler
+    console.error('❌ Erro fatal durante o processo de atribuição:', error);
+    throw error; // Re-lança erros inesperados para serem tratados pelo handler
   } finally {
     if (chatwootDb) {
       await chatwootDb.destroy();

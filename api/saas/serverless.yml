@@ -67,6 +67,7 @@ provider:
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
     CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
+    N8N_WEBHOOK_URL: ${ssm:/autonomia/${self:provider.stage}/n8n/webhook-url, 'https://auto.autonomia.site/workflow/AEuLu99AOhpofmhJ'}
     KNOWLEDGE_BUCKET: ${ssm:/autonomia/${self:provider.stage}/knowledge/bucket, 'autonomia-knowledge-docs'}
     KNOWLEDGE_PUBLIC_BASE: ${ssm:/autonomia/${self:provider.stage}/knowledge/public-base, 'https://autonomia-knowledge-docs.s3.amazonaws.com'}
   iamRoleStatements:
@@ -700,3 +701,12 @@ functions:
               paths:
                 itemId: true
           authorizer: ${self:custom.authorizer}
+
+  n8nWebhook:
+    handler: handlers/n8n-webhook.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Webhooks/n8n
+          method: post
+          cors: true
+          # Note: No authorizer for webhook endpoint

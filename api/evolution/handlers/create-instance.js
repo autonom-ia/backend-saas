@@ -10,15 +10,15 @@ exports.handler = async (event) => {
     const origin = getOrigin(event);
     const body = JSON.parse(event.body || '{}');
     const qs = event.queryStringParameters || {};
-    const domain = body.domain || qs.domain;
+    const accountId = body.account_id || qs.account_id;
 
     // We accept the same payload structure from Evolution API docs
     // Example minimal fields: instanceName, token, qrcode, number, integration, webhook, chatwoot*
     if (!body.instanceName) {
       return createResponse(400, { message: 'instanceName é obrigatório' }, origin);
     }
-    if (!domain) {
-      return createResponse(400, { message: 'domain é obrigatório' }, origin);
+    if (!accountId) {
+      return createResponse(400, { message: 'account_id é obrigatório' }, origin);
     }
 
     // Montar payload esperado pela Evolution API
@@ -68,17 +68,17 @@ exports.handler = async (event) => {
         numberPreview: payload.number ? String(payload.number).replace(/.(?=.{4})/g, '*') : undefined,
         tokenPreview: payload.token ? String(payload.token).slice(0, 4) + '****' : undefined,
       };
-      console.log('[CreateInstance] Payload preparado', { domain, payload: preview });
+      console.log('[CreateInstance] Payload preparado', { accountId, payload: preview });
     } catch {}
 
     // Se a instância estiver em 'connecting' ou 'close', deletar antes de criar
     try {
-      const stateResp = await connectionState(domain, payload.instanceName);
+      const stateResp = await connectionState(accountId, payload.instanceName);
       const state = stateResp?.instance?.state;
       console.log('[CreateInstance] Estado atual da instância', { instance: payload.instanceName, state });
       if (state === 'connecting' || state === 'close') {
         try {
-          await deleteInstance(domain, payload.instanceName);
+          await deleteInstance(accountId, payload.instanceName);
           console.log('[CreateInstance] Instância deletada para recriação', { instance: payload.instanceName });
         } catch (delErr) {
           console.warn('[CreateInstance] Falha ao deletar instância antes da recriação', { instance: payload.instanceName, error: delErr?.message || delErr });
@@ -89,14 +89,14 @@ exports.handler = async (event) => {
       console.warn('[CreateInstance] Não foi possível obter estado da instância, prosseguindo com criação', { instance: payload.instanceName, error: stErr?.message || stErr });
     }
 
-    const result = await createInstance(domain, payload);
+    const result = await createInstance(accountId, payload);
 
     // Opcional: buscar pairingCode imediatamente após criação
     // Caso a Evolution retorne o QR em base64 já na criação (quando qrcode=true), ele já estará em `result`.
     // pairingCode tipicamente vem de /instance/connect
     let enriched = result;
     try {
-      const connectResp = await connect(domain, payload.instanceName, payload.number);
+      const connectResp = await connect(accountId, payload.instanceName, payload.number);
       // Mesclar mantendo todos os dados originais do create + dados do connect (pairingCode, etc)
       enriched = { ...result, ...connectResp };
     } catch (e) {
