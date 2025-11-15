@@ -44,24 +44,28 @@ function createEvolutionDb() {
 }
 
 async function getChatwootParamsFromAccount(mainDb, accountId) {
-  const rows = await mainDb('account_parameter')
-    .select('name', 'value')
-    .where({ account_id: accountId });
-
-  // Usa o helper padrão do projeto para aceitar variações de nome
-  const params = formatParameters(rows);
-
-  const baseUrlRaw = params['chatwoot-url'] || params['CHATWOOT_URL'] || params['CHATWOOT_BASE_URL'];
-  const accountIdRaw = params['chatwoot-account'] || params['CHATWOOT_ACCOUNT'] || params['CHATWOOT_ACCOUNT_ID'];
-  const tokenRaw = params['chatwoot-token'] || params['CHATWOOT_TOKEN'];
+  // Importar helper com fallback para product_parameter
+  const { getParameterValue } = require('./evolution-service');
+  
+  // Buscar parâmetros com fallback
+  const baseUrlRaw = await getParameterValue(accountId, 'chatwoot-url', {
+    required: true,
+    aliases: ['CHATWOOT_URL', 'CHATWOOT_BASE_URL']
+  });
+  
+  const accountIdRaw = await getParameterValue(accountId, 'chatwoot-account', {
+    required: true,
+    aliases: ['CHATWOOT_ACCOUNT', 'CHATWOOT_ACCOUNT_ID']
+  });
+  
+  const tokenRaw = await getParameterValue(accountId, 'chatwoot-token', {
+    required: true,
+    aliases: ['CHATWOOT_TOKEN']
+  });
 
   const CHATWOOT_BASE_URL = String(baseUrlRaw || '').trim().replace(/\/+$/, '');
-  const CHATWOOT_ACCOUNT_ID = accountIdRaw ? String(accountIdRaw).trim() : '';
-  const CHATWOOT_TOKEN = tokenRaw ? String(tokenRaw).trim() : '';
-
-  if (!CHATWOOT_BASE_URL || !CHATWOOT_ACCOUNT_ID || !CHATWOOT_TOKEN) {
-    throw new Error('Parâmetros chatwoot-url, chatwoot-account e/ou chatwoot-token não encontrados em account_parameter');
-  }
+  const CHATWOOT_ACCOUNT_ID = String(accountIdRaw || '').trim();
+  const CHATWOOT_TOKEN = String(tokenRaw || '').trim();
 
   return { CHATWOOT_BASE_URL, CHATWOOT_ACCOUNT_ID, CHATWOOT_TOKEN };
 }

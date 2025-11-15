@@ -14,12 +14,19 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { name, value, product_id } = body;
+    const { name, value, product_id, short_description, help_text, default_value } = body;
     if (!name || !product_id) {
       return errorResponse({ success: false, message: 'Campos obrigatórios: name, product_id' }, 400);
     }
 
-    const created = await createProductParameter({ name, value, product_id });
+    const created = await createProductParameter({ 
+      name, 
+      value, 
+      product_id, 
+      short_description, 
+      help_text, 
+      default_value 
+    });
     return success({ success: true, message: 'Parâmetro criado com sucesso', data: created }, 201);
   } catch (error) {
     console.error('Erro ao criar parâmetro de produto:', error);

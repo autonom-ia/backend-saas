@@ -14,12 +14,19 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { name, value, account_id } = body;
+    const { name, value, account_id, short_description, help_text, default_value } = body;
     if (!name || !account_id) {
       return errorResponse({ success: false, message: 'Campos obrigatórios: name, account_id' }, 400);
     }
 
-    const created = await createAccountParameter({ name, value, account_id });
+    const created = await createAccountParameter({ 
+      name, 
+      value, 
+      account_id, 
+      short_description, 
+      help_text, 
+      default_value 
+    });
     return success({ success: true, message: 'Parâmetro de conta criado com sucesso', data: created }, 201);
   } catch (error) {
     console.error('Erro ao criar parâmetro de conta:', error);

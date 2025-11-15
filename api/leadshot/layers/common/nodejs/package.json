@@ -1,0 +1,14 @@
+{
+  "name": "autonomia-leadshot-layer-common",
+  "version": "1.0.0",
+  "description": "Dependências compartilhadas para Leadshot Lambda Functions",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "csv-parser": "^3.0.0",
+    "ioredis": "^5.6.1",
+    "knex": "^2.5.1",
+    "libphonenumber-js": "^1.10.0",
+    "pg": "^8.16.3",
+    "xlsx": "^0.18.5"
+  }
+}

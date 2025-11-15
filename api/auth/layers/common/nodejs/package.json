@@ -1,0 +1,10 @@
+{
+  "name": "auth-layer-common",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lambda Layer com dependências do módulo auth (@aws-sdk/client-cognito-identity-provider)",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.525.0"
+  }
+}

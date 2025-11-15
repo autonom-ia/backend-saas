@@ -40,15 +40,22 @@ exports.handler = async (event) => {
       // Não interrompe a criação da conta
     }
 
-    // Ao criar uma account, clonar parâmetros base (distinct name) com value = ''
+    // Criar parâmetros para a nova conta baseado nos padrões (account_parameters_standard)
     try {
       const knex = getDbConnection();
-      const distinctNames = await knex('account_parameter').distinct('name');
-      const names = distinctNames
-        .map(r => r.name)
-        .filter(n => typeof n === 'string' && n.trim().length > 0);
-      if (names.length > 0) {
-        const seedRows = names.map(name => ({ name, value: '', account_id: created.id }));
+      const standardParams = await knex('account_parameters_standard')
+        .select('name', 'short_description', 'help_text', 'default_value')
+        .orderBy('name', 'asc');
+      
+      if (standardParams.length > 0) {
+        const seedRows = standardParams.map(param => ({
+          name: param.name,
+          value: param.default_value || '',
+          account_id: created.id,
+          short_description: param.short_description,
+          help_text: param.help_text,
+          default_value: param.default_value
+        }));
         await knex('account_parameter').insert(seedRows);
       }
     } catch (seedErr) {

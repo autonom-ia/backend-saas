@@ -434,6 +434,67 @@ functions:
                 parameterId: true
           authorizer: ${self:custom.authorizer}
 
+  listAccountParametersStandard:
+    handler: handlers/list-account-parameters-standard.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AccountParametersStandard
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                visibleOnboarding: false
+          authorizer: ${self:custom.authorizer}
+
+  createAccountOnboarding:
+    handler: handlers/create-account-onboarding.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Onboarding/Accounts
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  listProductParametersStandard:
+    handler: handlers/list-product-parameters-standard.handler
+    events:
+      - http:
+          path: Autonomia/Saas/ProductParametersStandard
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                visibleOnboarding: false
+          authorizer: ${self:custom.authorizer}
+
+  getProductParametersForOnboarding:
+    handler: handlers/get-product-parameters-for-onboarding.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Products/{productId}/ParametersOnboarding
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                productId: true
+          authorizer: ${self:custom.authorizer}
+
+  getAccountParametersForOnboarding:
+    handler: handlers/get-account-parameters-for-onboarding.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}/ParametersOnboarding
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
   listConversationFunnels:
     handler: handlers/list-conversation-funnels.handler
     events:

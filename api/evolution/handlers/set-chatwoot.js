@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { setChatwoot, configureChatwootInbox, provisionChatwoot } = require('../services/evolution-service');
+const { setChatwoot, configureChatwootInbox, provisionChatwoot, getParameterValue } = require('../services/evolution-service');
 const { getDbConnection } = require('../utils/database');
 const { createResponse, preflight, getOrigin } = require('../utils/cors');
 
@@ -9,9 +9,21 @@ exports.handler = async (event) => {
   }
   try {
     const origin = getOrigin(event);
-    const body = JSON.parse(event.body || '{}');
+    
+    // Parse body com segurança (trata string vazia, null, undefined)
+    let body = {};
+    try {
+      if (event.body && event.body.trim()) {
+        body = JSON.parse(event.body);
+      }
+    } catch (parseErr) {
+      console.warn('[set-chatwoot] Erro ao fazer parse do body, usando objeto vazio', parseErr.message);
+    }
+    
     const qs = event.queryStringParameters || {};
     const path = event.pathParameters || {};
+    
+    // accountId = UUID da conta no banco SAAS (obrigatório)
     const accountId = body.account_id || qs.account_id;
 
     // instance pode vir na URL (/chatwoot/set/{instance}) ou no body.instanceName
@@ -20,148 +32,55 @@ exports.handler = async (event) => {
       return createResponse(400, { message: 'Parâmetro instance é obrigatório (path ou body.instanceName).' }, origin);
     }
     if (!accountId) {
-      return createResponse(400, { message: 'account_id é obrigatório' }, origin);
+      return createResponse(400, { message: 'account_id (UUID da conta SAAS) é obrigatório' }, origin);
     }
 
-    // Apenas os campos suportados pelo endpoint da Evolution (conforme cURL)
-    const allowed = [
-      'enabled',
-      'account_id',
-      'token',
-      'url',
-      'sign_msg',
-      'sign_delimiter',
-      'reopen_conversation',
-      'conversation_pending',
-      'import_contacts',
-      'import_messages',
-      'days_limit_import_messages',
-      'auto_create',
-    ];
-    const payload = {};
-    for (const k of allowed) {
-      if (Object.prototype.hasOwnProperty.call(body, k)) payload[k] = body[k];
-    }
-
-    // Valores fixos (independem do body)
-    payload.sign_msg = false;
-    payload.reopen_conversation = false;
-    payload.conversation_pending = false;
-    payload.import_contacts = true;
-    payload.import_messages = false;
-    payload.days_limit_import_messages = 30;
-    payload.auto_create = true;
-
-    // Validação opcional: se account_id foi informado, checar existência na API do Chatwoot
-    if (Object.prototype.hasOwnProperty.call(payload, 'account_id')) {
-      const accountId = String(payload.account_id || '').trim();
-      const cwUrl = String(body.url || '').trim();
-      const cwToken = String(body.token || '').trim();
-
-      if (!accountId) {
-        return createResponse(400, { message: 'account_id informado é inválido' }, origin);
-      }
-      if (!cwUrl || !cwToken) {
-        return createResponse(400, { message: 'Para validar account_id é obrigatório informar url e token' }, origin);
-      }
-
-      try {
-        const path = `/api/v1/accounts/${encodeURIComponent(accountId)}`;
-        const resp = await axios.get(`${cwUrl}${path}`, { headers: { api_access_token: cwToken } });
-        if (resp.status < 200 || resp.status >= 300) {
-          return createResponse(400, { message: 'account_id não encontrado na API do Chatwoot', status: resp.status }, origin);
-        }
-      } catch (e) {
-        const status = e?.response?.status;
-        const details = e?.response?.data || e?.message || String(e);
-        return createResponse(400, { message: 'Falha ao validar account_id no Chatwoot', status, details }, origin);
-      }
-    }
-
-    // Se account_id NÃO foi enviado, provisionar Chatwoot para a conta e preencher os campos obrigatórios
-    if (!Object.prototype.hasOwnProperty.call(payload, 'account_id')) {
-      try {
-        const prov = await provisionChatwoot(accountId);
-        payload.account_id = prov.chatwootAccountId;
-        if (!payload.url) payload.url = prov.chatwootUrl;
-        if (!payload.token) payload.token = prov.chatwootToken;
-        console.log('[set-chatwoot] Provision concluído. Campos preenchidos a partir do provisionamento', {
-          account_id: String(payload.account_id),
-          url: payload.url,
-          tokenPreview: typeof payload.token === 'string' ? payload.token.slice(0, 4) + '****' : undefined,
-        });
-      } catch (provErr) {
-        const msg = provErr?.message || String(provErr);
-        return createResponse(400, { message: 'Falha ao provisionar Chatwoot para a conta', details: msg }, origin);
-      }
-    }
-
-    // Persistir parâmetros na nossa base (para permitir configureChatwootInbox buscar valores)
-    // Persistimos após possível provisionamento para garantir consistência
+    // ===== PROVISIONAR CHATWOOT =====
+    // Busca ou cria conta no Chatwoot, valida e retorna credenciais
+    // Toda lógica de fallback, validação e criação está no service
+    let chatwootAccountId, chatwootUrl, chatwootToken;
     try {
-      const db = getDbConnection();
-      const account = await db('account').where({ id: accountId }).first();
-      if (account) {
-        const upsert = async (name, value) => {
-          if (value === undefined || value === null || value === '') return;
-          const existing = await db('account_parameter').where({ account_id: account.id, name }).first();
-          if (existing) await db('account_parameter').where({ id: existing.id }).update({ value: String(value) });
-          else await db('account_parameter').insert({ account_id: account.id, name, value: String(value) });
-        };
-        await upsert('chatwoot-account', payload.account_id);
-        await upsert('chatwoot-url', payload.url);
-        await upsert('chatwoot-token', payload.token);
-      }
-    } catch (e) {
-      console.warn('[set-chatwoot] Falha ao persistir parâmetros locais (após provision)', e?.message || e);
-    }
-
-    // Normalizar tipos exigidos pela Evolution
-    if (payload.account_id !== undefined && payload.account_id !== null) {
-      const raw = String(payload.account_id).trim();
-      // Evolution espera accountId como string
-      payload.account_id = raw;
-    }
-    if (payload.url !== undefined && payload.url !== null) {
-      payload.url = String(payload.url).trim();
-    }
-    if (payload.token !== undefined && payload.token !== null) {
-      payload.token = String(payload.token).trim();
-    }
-
-    // Chamar Evolution API
-    try {
-      const preview = {
-        instance,
+      console.log('[set-chatwoot] Iniciando provisionamento Chatwoot', { accountId, instance });
+      const prov = await provisionChatwoot(accountId);
+      
+      chatwootAccountId = prov.chatwootAccountId;
+      chatwootUrl = prov.chatwootUrl;
+      chatwootToken = prov.chatwootToken;
+      
+      console.log('[set-chatwoot] Provisionamento concluído', {
         accountId,
-        body: {
-          enabled: payload.enabled,
-          url: payload.url,
-          tokenPreview: typeof payload.token === 'string' ? payload.token.slice(0,4) + '****' : undefined,
-          account_id: payload.account_id,
-          accountId: payload.account_id,
-          sign_msg: payload.sign_msg,
-          signMsg: payload.sign_msg,
-          reopen_conversation: payload.reopen_conversation,
-          reopenConversation: payload.reopen_conversation,
-          conversation_pending: payload.conversation_pending,
-          conversationPending: payload.conversation_pending,
-          import_contacts: payload.import_contacts,
-          importContacts: payload.import_contacts,
-          import_messages: payload.import_messages,
-          importMessages: payload.import_messages,
-          days_limit_import_messages: payload.days_limit_import_messages,
-          daysLimitImportMessages: payload.days_limit_import_messages,
-          auto_create: payload.auto_create,
-          autoCreate: payload.auto_create,
-        }
-      };
-      console.log('[set-chatwoot] Enviando para Evolution /chatwoot/set', preview);
-    } catch {}
-    // Construir payload compatível com a Evolution (duplicando camelCase)
+        instance,
+        chatwootAccountId,
+        chatwootUrl
+      });
+    } catch (provErr) {
+      const msg = provErr?.message || String(provErr);
+      console.error('[set-chatwoot] Falha ao provisionar Chatwoot', { accountId, error: msg });
+      return createResponse(400, { 
+        message: 'Falha ao provisionar Chatwoot para a conta', 
+        details: msg 
+      }, origin);
+    }
+
+    // ===== MONTAR PAYLOAD PARA EVOLUTION API =====
+    const payload = {
+      enabled: body.enabled !== undefined ? body.enabled : true,
+      account_id: chatwootAccountId,
+      url: chatwootUrl,
+      token: chatwootToken,
+      sign_msg: false,
+      reopen_conversation: false,
+      conversation_pending: false,
+      import_contacts: true,
+      import_messages: false,
+      days_limit_import_messages: 30,
+      auto_create: true,
+    };
+    // ===== CONSTRUIR PAYLOAD PARA EVOLUTION API =====
+    // Evolution aceita tanto snake_case quanto camelCase, enviamos ambos por compatibilidade
     const evoPayload = (() => {
       const out = { ...payload };
-      // Evolution requer accountId string
+      // Duplicar em camelCase
       out.accountId = payload.account_id != null ? String(payload.account_id) : undefined;
       out.signMsg = payload.sign_msg;
       out.reopenConversation = payload.reopen_conversation;
@@ -174,26 +93,42 @@ exports.handler = async (event) => {
       Object.keys(out).forEach(k => { if (out[k] === undefined) delete out[k]; });
       return out;
     })();
+    
+    // ===== CHAMAR EVOLUTION API (setChatwoot) =====
     let result;
     try {
+      // accountId aqui é UUID da conta SAAS (usado para buscar config da Evolution)
       result = await setChatwoot(accountId, instance, evoPayload);
+      console.log('[set-chatwoot] Evolution API respondeu com sucesso');
     } catch (e) {
       const status = e?.response?.status || 400;
       const data = e?.response?.data;
       const details = data?.response || data || e?.message || String(e);
-      console.error('[set-chatwoot] Evolution retornou erro', { status, details });
+      console.error('[set-chatwoot] Evolution API retornou erro', { status, details });
       return createResponse(status, { message: 'Erro na Evolution ao configurar Chatwoot', details }, origin);
     }
 
-    // Configurar Agent Bot e Inbox no Chatwoot (atualiza feature_flags e seta bot/inbox)
+    // ===== CONFIGURAR AGENT BOT E INBOX NO CHATWOOT =====
+    // Cria Agent Bot, associa à Inbox e persiste parâmetro chatwoot-inbox
+    // Passa parâmetros já obtidos para evitar consultas duplicadas
     let cfg;
     try {
-      cfg = await configureChatwootInbox(accountId, String(instance));
+      cfg = await configureChatwootInbox(accountId, String(instance), {
+        chatwootUrl,
+        chatwootToken,
+        chatwootAccountId
+      });
+      console.log('[set-chatwoot] Agent Bot/Inbox configurados', { botId: cfg?.botId, inboxId: cfg?.inboxId });
     } catch (cfgErr) {
-      console.warn('[set-chatwoot] Falha ao configurar Agent Bot/Inbox', cfgErr?.message || cfgErr);
+      console.warn('[set-chatwoot] Falha ao configurar Agent Bot/Inbox (não crítico)', cfgErr?.message || cfgErr);
     }
 
-    return createResponse(200, { ...result, chatwootAgentBotId: cfg?.botId, chatwootInboxId: cfg?.inboxId }, origin);
+    return createResponse(200, { 
+      ...result, 
+      chatwootAgentBotId: cfg?.botId, 
+      chatwootInboxId: cfg?.inboxId,
+      chatwootAccountId  // Retornar o ID da conta no Chatwoot para referência
+    }, origin);
   } catch (err) {
     console.error('Erro em SetChatwoot:', err);
     return createResponse(500, { message: 'Erro ao configurar Chatwoot', details: err.message }, getOrigin(event));
