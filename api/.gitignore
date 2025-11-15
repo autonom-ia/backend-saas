@@ -1,7 +1,6 @@
-# Ignore Lambda Layers directories created for packaging
-layers/
-**/layers/
-*/layers/
+# Ignore Lambda Layers node_modules (mas manter estrutura e package.json)
+layers/**/node_modules/
+layers/**/package-lock.json
 
 # Common build artifacts (kept focused; layers are the priority per request)
 .serverless/

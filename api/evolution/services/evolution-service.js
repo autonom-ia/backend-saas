@@ -15,15 +15,65 @@ function mask(value) {
 }
 
 // ================= Helpers: Chatwoot DB connection via account_parameter (no SSM) =================
-async function getAccountPrefix(db, accountId) {
-  const row = await db('account_parameter')
-    .select('value')
-    .where({ account_id: accountId, name: 'prefix-parameter' })
-    .first();
-  if (!row || !row.value) {
-    throw new Error('Parâmetro prefix-parameter não encontrado para a conta');
+
+// Helper para buscar parâmetro com fallback: account_parameter → product_parameter
+async function getParameterValue(accountId, paramName, options = {}) {
+  const db = getDbConnection();
+  const { required = false, aliases = [] } = options;
+  
+  // 1. Buscar na account primeiro
+  const account = await db('account').where({ id: accountId }).first();
+  if (!account) {
+    throw new Error(`Conta não encontrada: ${accountId}`);
   }
-  return row.value;
+  
+  // Tentar todas as variações do nome do parâmetro
+  const allNames = [paramName, ...aliases];
+  
+  // 2. Tentar account_parameter
+  for (const name of allNames) {
+    const accountParam = await db('account_parameter')
+      .select('value')
+      .where({ account_id: accountId, name })
+      .first();
+    
+    if (accountParam && accountParam.value && String(accountParam.value).trim()) {
+      console.log(`[getParameterValue] Encontrado em account_parameter: ${paramName} (alias: ${name})`);
+      return String(accountParam.value).trim();
+    }
+  }
+  
+  // 3. Se não encontrou em account, buscar em product_parameter
+  if (account.product_id) {
+    for (const name of allNames) {
+      const productParam = await db('product_parameter')
+        .select('value')
+        .where({ product_id: account.product_id, name })
+        .first();
+      
+      if (productParam && productParam.value && String(productParam.value).trim()) {
+        console.log(`[getParameterValue] Encontrado em product_parameter (fallback): ${paramName} (alias: ${name})`);
+        return String(productParam.value).trim();
+      }
+    }
+  }
+  
+  // 4. Se obrigatório e não encontrou, lançar erro
+  if (required) {
+    throw new Error(`Parâmetro obrigatório não encontrado: ${paramName} (aliases: ${aliases.join(', ')})`);
+  }
+  
+  console.log(`[getParameterValue] Parâmetro não encontrado: ${paramName}`);
+  return null;
+}
+
+async function getAccountPrefix(db, accountId) {
+  // Buscar com fallback para product_parameter (opcional)
+  const value = await getParameterValue(accountId, 'prefix-parameter', {
+    required: false,
+    aliases: ['PREFIX_PARAMETER', 'prefix']
+  });
+  return value;
 }
 
 async function createChatwootDbConnection(identifier) {
@@ -55,13 +105,11 @@ async function createChatwootDbConnection(identifier) {
       accountId = row.account_id;
     }
 
-    const hostRow = await db('account_parameter')
-      .select('value')
-      .where({ account_id: accountId, name: 'chatwoot_db_host' })
-      .first();
-    if (!hostRow || !hostRow.value) throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado`);
-
-    const host = hostRow.value;
+    // Usar helper com fallback para product_parameter
+    const host = await getParameterValue(accountId, 'chatwoot_db_host', { 
+      required: true,
+      aliases: ['chatwoot-db-host', 'CHATWOOT_DB_HOST']
+    });
     const port = 5432;
     const user = 'postgres';
     const database = 'chatwoot';
@@ -88,25 +136,16 @@ async function getEvolutionConfig(accountId) {
 
   const cacheKey = `evo-config:${accountId}`; // cache desabilitado
 
-  const db = getDbConnection();
-  // 1) Buscar account pelo ID
-  const account = await db('account').where({ id: accountId }).first();
-  if (!account) {
-    throw new Error(`Conta não encontrada para account_id: ${accountId}`);
-  }
-
-  // 2) Buscar parâmetros da conta
-  const paramsRows = await db('account_parameter')
-    .where('account_id', account.id)
-    .select('name', 'value');
-
-  const params = formatParameters(paramsRows);
-  const apiUrl = params['evo-url'] || params['evolution-url'] || params['EVOLUTION_URL'];
-  const apiKey = params['api-key-evolution'] || params['evolution-apikey'] || params['EVOLUTION_API_KEY'];
-
-  if (!apiUrl || !apiKey) {
-    throw new Error('Parâmetros evo-url e/ou api-key-evolution não configurados para a conta');
-  }
+  // Buscar parâmetros com fallback para product_parameter
+  const apiUrl = await getParameterValue(accountId, 'evo-url', {
+    required: true,
+    aliases: ['evolution-url', 'EVOLUTION_URL']
+  });
+  
+  const apiKey = await getParameterValue(accountId, 'api-key-evolution', {
+    required: true,
+    aliases: ['evolution-apikey', 'EVOLUTION_API_KEY']
+  });
 
   // Sanitização do apiKey para evitar caracteres inválidos em header (CR, LF, etc)
   const sanitizedApiKey = String(apiKey)
@@ -257,31 +296,39 @@ async function deleteInstance(accountId, instance) {
   return data;
 }
 
-module.exports = { createInstance, setChatwoot, connect, connectionState, deleteInstance };
+module.exports = { 
+  createInstance, 
+  setChatwoot, 
+  connect, 
+  connectionState, 
+  deleteInstance,
+  getParameterValue // Exportar helper para uso em outros módulos
+};
 
 // ================= Chatwoot Provisioning =================
 async function provisionChatwoot(accountId) {
-  // Busca account e parâmetros
-  const db = getDbConnection();
-  const account = await db('account').where({ id: accountId }).first();
-  if (!account) throw new Error(`Conta não encontrada para account_id: ${accountId}`);
-  const paramsRows = await db('account_parameter')
-    .where('account_id', account.id)
-    .select('name', 'value');
-  const params = formatParameters(paramsRows);
-  const chatwootUrl = params['chatwoot-url'] || params['CHATWOOT_URL'];
-  const chatwootToken = params['chatwoot-token'] || params['CHATWOOT_TOKEN'];
-  if (!chatwootUrl || !chatwootToken) {
-    throw new Error('Parâmetros chatwoot-url e/ou chatwoot-token não configurados para a conta');
-  }
+  // Buscar parâmetros com fallback para product_parameter
+  const chatwootUrl = await getParameterValue(accountId, 'chatwoot-url', {
+    required: true,
+    aliases: ['CHATWOOT_URL']
+  });
+  
+  const chatwootToken = await getParameterValue(accountId, 'chatwoot-token', {
+    required: true,
+    aliases: ['CHATWOOT_TOKEN']
+  });
 
-  // Token de plataforma para endpoints "/platform" (prioriza parâmetro da conta)
-  const platformTokenRaw = (
-    params['chatwoot-platform-token'] ||
-    params['CHATWOOT_PLATFORM_TOKEN'] ||
-    process.env.CHATWOOT_PLATFORM_TOKEN ||
-    'h5Gj43DZYb5HnY75gpGwUE3T'
-  );
+  // Token de plataforma para endpoints "/platform" (busca com fallback)
+  let platformTokenRaw = await getParameterValue(accountId, 'chatwoot-platform-token', {
+    required: false,
+    aliases: ['CHATWOOT_PLATFORM_TOKEN']
+  });
+  
+  // Fallback para env ou valor padrão
+  if (!platformTokenRaw) {
+    platformTokenRaw = process.env.CHATWOOT_PLATFORM_TOKEN || 'h5Gj43DZYb5HnY75gpGwUE3T';
+  }
+  
   const platformToken = String(platformTokenRaw).replace(/[\r\n\t\v\f]/g, '').trim();
   if (platformToken !== platformTokenRaw) {
     console.warn('[Chatwoot] platform token sanitizado (removidos caracteres de controle)', {
@@ -290,15 +337,24 @@ async function provisionChatwoot(accountId) {
       afterPreview: mask(platformToken),
     });
   }
+  
+  // Buscar chatwoot-account com fallback (account_parameter → product_parameter)
+  let chatwootAccountId = await getParameterValue(accountId, 'chatwoot-account', {
+    required: false,
+    aliases: ['CHATWOOT_ACCOUNT']
+  });
+
+  const db = getDbConnection();
+  const account = await db('account').where({ id: accountId }).first();
+  if (!account) throw new Error(`Conta não encontrada para account_id: ${accountId}`);
 
   // Para endpoints que contenham "/platform" usar api_access_token obtido
   const cw = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: platformToken } });
   // Para endpoints de conta (não plataforma), utilizar chatwootToken da conta
   const cwAccount = axios.create({ baseURL: chatwootUrl, timeout: 20000, headers: { api_access_token: String(chatwootToken).trim() } });
-  console.log('[Chatwoot] Provision start', { accountId, url: chatwootUrl, tokenPreview: mask(chatwootToken), platformTokenPreview: mask(platformToken) });
+  console.log('[Chatwoot] Provision start', { accountId, chatwootAccountId, url: chatwootUrl, tokenPreview: mask(chatwootToken), platformTokenPreview: mask(platformToken) });
 
   // 1) Reutilizar conta existente se já houver parâmetro chatwoot-account; caso contrário, criar
-  let chatwootAccountId = params['chatwoot-account'] || params['CHATWOOT_ACCOUNT'];
   if (chatwootAccountId) {
     try {
       const path = `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`;
@@ -383,25 +439,35 @@ module.exports.provisionChatwoot = provisionChatwoot;
  * Cria Agent Bot, associa à Inbox e salva parâmetro chatwoot-inbox.
  * @param {string} accountId
  * @param {string} instanceName Nome da instância (usado como nome da inbox)
+ * @param {Object} options Parâmetros opcionais para evitar consultas duplicadas
+ * @param {string} options.chatwootUrl URL do Chatwoot (opcional, busca se não fornecido)
+ * @param {string} options.chatwootToken Token do Chatwoot (opcional, busca se não fornecido)
+ * @param {string} options.chatwootAccountId ID da conta no Chatwoot (opcional, busca se não fornecido)
  */
-async function configureChatwootInbox(accountId, instanceName) {
+async function configureChatwootInbox(accountId, instanceName, options = {}) {
   const db = getDbConnection();
   if (!accountId) throw new Error('account_id é obrigatório');
   if (!instanceName) throw new Error('instanceName é obrigatório');
 
-  // Buscar account e parâmetros
+  // Buscar parâmetros apenas se não foram fornecidos (evita consultas duplicadas)
+  const chatwootUrl = options.chatwootUrl || await getParameterValue(accountId, 'chatwoot-url', {
+    required: true,
+    aliases: ['CHATWOOT_URL']
+  });
+  
+  const chatwootToken = options.chatwootToken || await getParameterValue(accountId, 'chatwoot-token', {
+    required: true,
+    aliases: ['CHATWOOT_TOKEN']
+  });
+  
+  const chatwootAccountId = options.chatwootAccountId || await getParameterValue(accountId, 'chatwoot-account', {
+    required: true,
+    aliases: ['CHATWOOT_ACCOUNT']
+  });
+  
+  // Buscar account para obter product_id
   const account = await db('account').where({ id: accountId }).first();
   if (!account) throw new Error(`Conta não encontrada para account_id: ${accountId}`);
-  const paramsRows = await db('account_parameter')
-    .where('account_id', account.id)
-    .select('name', 'value');
-  const aparams = formatParameters(paramsRows);
-  const chatwootUrl = aparams['chatwoot-url'] || aparams['CHATWOOT_URL'];
-  const chatwootToken = aparams['chatwoot-token'] || aparams['CHATWOOT_TOKEN'];
-  const chatwootAccountId = aparams['chatwoot-account'] || aparams['CHATWOOT_ACCOUNT'];
-  if (!chatwootUrl || !chatwootToken || !chatwootAccountId) {
-    throw new Error('Parâmetros chatwoot-url, chatwoot-token e/ou chatwoot-account ausentes');
-  }
 
   // Buscar parâmetros do produto para obter n8n_input_webhook (webhook de entrada do Agent)
   let inputWebhook;
@@ -424,6 +490,9 @@ async function configureChatwootInbox(accountId, instanceName) {
   let chatwootDb;
   try {
     const prefix = await getAccountPrefix(db, account.id);
+    if (!prefix) {
+      throw new Error('prefix-parameter não encontrado (conexão direta com DB Chatwoot indisponível)');
+    }
     chatwootDb = await createChatwootDbConnection(prefix);
     console.log('[Chatwoot] Atualizando feature_flags na conta', { chatwootAccountId });
     await chatwootDb.raw('UPDATE accounts SET feature_flags = ? WHERE id = ?', [1099243192319, chatwootAccountId]);
@@ -469,27 +538,50 @@ async function configureChatwootInbox(accountId, instanceName) {
     }
   }
 
-  // 2) Obter inbox id via SELECT no banco do Chatwoot usando a mesma conexão
+  // 2) Obter inbox id via SELECT no banco do Chatwoot ou via API
   let inboxId;
-  try {
-    if (!chatwootDb) throw new Error('Conexão Chatwoot DB indisponível');
-    const row = await chatwootDb('inboxes')
-      .select('id')
-      .where({ account_id: chatwootAccountId, name: String(instanceName).trim() })
-      .first();
-    console.log('[Chatwoot] Inbox select debug', {
-      instanceName,
-      chatwootAccountId,
-      found: !!row,
-      inboxId: row?.id,
-    });
-    inboxId = row?.id;
-  } catch (e) {
-    console.error('[Chatwoot] Falha ao consultar inbox via SELECT', { error: e?.message || e });
-  } finally {
-    try { if (chatwootDb) await chatwootDb.destroy(); } catch {}
+  
+  // 2.1) Tentar via SELECT direto no banco (mais rápido)
+  if (chatwootDb) {
+    try {
+      const row = await chatwootDb('inboxes')
+        .select('id')
+        .where({ account_id: chatwootAccountId, name: String(instanceName).trim() })
+        .first();
+      console.log('[Chatwoot] Inbox encontrada via SELECT', {
+        instanceName,
+        chatwootAccountId,
+        found: !!row,
+        inboxId: row?.id,
+      });
+      inboxId = row?.id;
+    } catch (e) {
+      console.error('[Chatwoot] Falha ao consultar inbox via SELECT', { error: e?.message || e });
+    } finally {
+      try { await chatwootDb.destroy(); } catch {}
+    }
+  } else {
+    console.warn('[Chatwoot] chatwootDb não disponível, pulando SELECT de inbox');
   }
-  if (!inboxId) throw new Error(`Inbox não encontrada para nome: ${instanceName}`);
+  
+  // 2.2) Se não encontrou via SELECT, buscar via API do Chatwoot
+  if (!inboxId) {
+    try {
+      console.log('[Chatwoot] Buscando inbox via API', { chatwootAccountId, instanceName });
+      const { data: inboxes } = await cw.get(`/api/v1/accounts/${encodeURIComponent(chatwootAccountId)}/inboxes`);
+      const inbox = inboxes?.payload?.find(i => i.name === String(instanceName).trim());
+      if (inbox) {
+        inboxId = inbox.id;
+        console.log('[Chatwoot] Inbox encontrada via API', { inboxId, name: inbox.name });
+      }
+    } catch (e) {
+      console.error('[Chatwoot] Falha ao buscar inbox via API', { error: e?.response?.data || e?.message || e });
+    }
+  }
+  
+  if (!inboxId) {
+    throw new Error(`Inbox não encontrada para nome: ${instanceName} (tentado via SELECT e API)`);
+  }
 
   // 2.1) Associar Agent Bot à inbox
   try {

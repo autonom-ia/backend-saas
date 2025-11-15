@@ -19,12 +19,20 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { name, value, account_id } = body;
-    if (name === undefined && value === undefined && account_id === undefined) {
+    const { name, value, account_id, short_description, help_text, default_value } = body;
+    if (name === undefined && value === undefined && account_id === undefined && 
+        short_description === undefined && help_text === undefined && default_value === undefined) {
       return errorResponse({ success: false, message: 'Forneça ao menos um campo para atualizar' }, 400);
     }
 
-    const updated = await updateAccountParameter(parameterId, { name, value, account_id });
+    const updated = await updateAccountParameter(parameterId, { 
+      name, 
+      value, 
+      account_id, 
+      short_description, 
+      help_text, 
+      default_value 
+    });
     return success({ success: true, message: 'Parâmetro de conta atualizado com sucesso', data: updated }, 200);
   } catch (error) {
     if (error?.message === 'Parâmetro de conta não encontrado') {
