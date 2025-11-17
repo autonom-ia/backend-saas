@@ -67,45 +67,19 @@ async function getParameterValue(accountId, paramName, options = {}) {
   return null;
 }
 
-async function getAccountPrefix(db, accountId) {
-  // Buscar com fallback para product_parameter (opcional)
-  const value = await getParameterValue(accountId, 'prefix-parameter', {
-    required: false,
-    aliases: ['PREFIX_PARAMETER', 'prefix']
-  });
-  return value;
-}
-
-async function createChatwootDbConnection(identifier) {
+async function createChatwootDbConnection(accountId) {
   try {
-    const db = getDbConnection();
-    const raw = String(identifier || '');
-    const isNumeric = /^\d+$/.test(raw);
-
-    let accountId;
-    if (isNumeric) {
-      accountId = raw;
-    } else {
-      // identifier é um prefixo. Normalizar e localizar a conta correspondente.
-      const normalized = raw.replace(/^\/+|\/+$/g, '');
-      // Tentar match exato
-      let row = await db('account_parameter')
-        .select('account_id')
-        .where({ name: 'prefix-parameter', value: normalized })
-        .first();
-      // Fallback: tentar por prefixo contido (ex.: '/empresta/chatwoot/db')
-      if (!row) {
-        row = await db('account_parameter')
-          .select('account_id')
-          .where('name', 'prefix-parameter')
-          .andWhere('value', 'like', `%${normalized}%`)
-          .first();
-      }
-      if (!row) throw new Error(`Conta não encontrada para o prefixo '${normalized}'`);
-      accountId = row.account_id;
+    if (!accountId) {
+      throw new Error('accountId é obrigatório');
     }
 
-    // Usar helper com fallback para product_parameter
+    const db = getDbConnection();
+    const account = await db('account').where({ id: accountId }).first();
+    if (!account) {
+      throw new Error(`Conta não encontrada para accountId: ${accountId}`);
+    }
+
+    // Buscar host do Chatwoot DB com fallback para product_parameter
     const host = await getParameterValue(accountId, 'chatwoot_db_host', { 
       required: true,
       aliases: ['chatwoot-db-host', 'CHATWOOT_DB_HOST']
@@ -115,7 +89,7 @@ async function createChatwootDbConnection(identifier) {
     const database = 'chatwoot';
     const password = 'Mfcd62!!Mfcd62!!';
 
-    console.log('[ChatwootDB] Conectando', { host, database, port, user, password: '[REDACTED]' });
+    console.log('[ChatwootDB] Conectando', { accountId, host, database, port, user, password: '[REDACTED]' });
     const chatwootDb = knex({
       client: 'pg',
       connection: { host, port, user, password, database },
@@ -123,10 +97,10 @@ async function createChatwootDbConnection(identifier) {
       acquireConnectionTimeout: 10000,
     });
     await chatwootDb.raw('SELECT 1');
-    console.log('[ChatwootDB] Conexão OK');
+    console.log('[ChatwootDB] Conexão OK', { accountId });
     return chatwootDb;
   } catch (err) {
-    console.error('[ChatwootDB] Erro ao conectar', err);
+    console.error('[ChatwootDB] Erro ao conectar', { accountId, error: err.message });
     throw err;
   }
 }
@@ -489,16 +463,12 @@ async function configureChatwootInbox(accountId, instanceName, options = {}) {
   //    e manter a mesma conexão para consultar a inbox por SELECT
   let chatwootDb;
   try {
-    const prefix = await getAccountPrefix(db, account.id);
-    if (!prefix) {
-      throw new Error('prefix-parameter não encontrado (conexão direta com DB Chatwoot indisponível)');
-    }
-    chatwootDb = await createChatwootDbConnection(prefix);
-    console.log('[Chatwoot] Atualizando feature_flags na conta', { chatwootAccountId });
+    chatwootDb = await createChatwootDbConnection(accountId);
+    console.log('[Chatwoot] Atualizando feature_flags na conta', { accountId, chatwootAccountId });
     await chatwootDb.raw('UPDATE accounts SET feature_flags = ? WHERE id = ?', [1099243192319, chatwootAccountId]);
     console.log('[Chatwoot] feature_flags atualizado com sucesso');
   } catch (e) {
-    console.warn('[Chatwoot] Não foi possível atualizar feature_flags antes do Agent Bot', { error: e?.message || e });
+    console.warn('[Chatwoot] Não foi possível atualizar feature_flags antes do Agent Bot', { accountId, error: e?.message || e });
     // seguir sem interromper o fluxo
   }
 

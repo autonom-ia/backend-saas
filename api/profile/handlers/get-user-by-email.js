@@ -31,13 +31,27 @@ module.exports.handler = async (event) => {
       // Buscar o usuário pelo email
       const user = await knex('users')
         .where({ email })
-        .select('id', 'name', 'email', 'phone', 'created_at')
+        .select('id', 'name', 'email', 'phone', 'is_first_login', 'created_at')
         .first();
 
       console.log('Resultado da query:', user ? 'Usuário encontrado' : 'Usuário não encontrado');
 
       if (!user) {
         return createResponse(404, { message: 'Usuário não encontrado', email }, origin);
+      }
+
+      // Capturar o valor de is_first_login ANTES de atualizar
+      const isFirstLogin = user.is_first_login;
+
+      // Se for primeiro login, atualizar flag para false
+      if (isFirstLogin) {
+        await knex('users')
+          .where({ id: user.id })
+          .update({ 
+            is_first_login: false,
+            updated_at: knex.fn.now()
+          });
+        console.log(`Usuário ${user.email} - is_first_login atualizado para false`);
       }
 
       // Calcular flag de admin consultando perfis de acesso do usuário
@@ -47,8 +61,14 @@ module.exports.handler = async (event) => {
         .pluck('access_profile_id');
       const isAdmin = Array.isArray(userProfiles) && userProfiles.includes(ADMIN_PROFILE_ID);
 
-      // Retornar os dados do usuário com headers CORS (inclui isAdmin)
-      return createResponse(200, { user: { ...user, isAdmin } }, origin);
+      // Retornar os dados do usuário com headers CORS (inclui isAdmin e isFirstLogin)
+      return createResponse(200, { 
+        user: { 
+          ...user, 
+          isAdmin,
+          isFirstLogin // Retorna o valor ANTES de atualizar
+        } 
+      }, origin);
     } catch (dbError) {
       console.error('Erro específico na conexão com o banco de dados:', dbError);
       return createResponse(500, { 
