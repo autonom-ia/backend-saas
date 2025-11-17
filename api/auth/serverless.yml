@@ -38,6 +38,7 @@ provider:
             - "cognito-idp:SignUp"
             - "cognito-idp:ForgotPassword"
             - "cognito-idp:ConfirmForgotPassword"
+            - "cognito-idp:AdminUpdateUserAttributes"
           Resource: !GetAtt CognitoUserPool.Arn
 
 functions:

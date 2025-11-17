@@ -16,7 +16,7 @@ module.exports.handler = async (event) => {
 
     const params = {
       AuthFlow: 'USER_PASSWORD_AUTH',
-      ClientId: process.env.COGNITO_USER_POOL_CLIENT_ID, // Será injetado pelo Serverless
+      ClientId: process.env.COGNITO_USER_POOL_CLIENT_ID,
       AuthParameters: {
         USERNAME: email,
         PASSWORD: password,
