@@ -9,7 +9,7 @@ custom:
   customDomain:
     domainName: api-saas.autonomia.site
     basePath: ''
-    stage: ${opt:stage, 'prod'}
+    stage: ${opt:stage, 'staging'}
     certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
     createRoute53Record: false
     endpointType: 'edge'
@@ -44,7 +44,7 @@ provider:
   name: aws
   runtime: nodejs18.x
 
-  stage: ${opt:stage, 'prod'}
+  stage: ${opt:stage, 'staging'}
   region: us-east-1
   memorySize: 512
   timeout: 30
@@ -57,7 +57,7 @@ provider:
       - 'subnet-07184b6cfa97367e2'
       - 'subnet-000fbcffe0f8d9a11'
   environment:
-    NODE_ENV: ${opt:stage, 'prod'}
+    NODE_ENV: ${self:provider.stage}
     DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
     DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
     DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}

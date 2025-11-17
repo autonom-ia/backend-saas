@@ -6,13 +6,13 @@ const registerUser = async (event) => {
     return preflight(event);
   }
   try {
-    const { email, name, phone, domain } = JSON.parse(event.body);
+    const { email, name, phone, domain, access_profile_id } = JSON.parse(event.body);
 
     if (!email || !name || !phone || !domain) {
       return createResponse(400, { message: 'Email, nome, telefone e domínio são obrigatórios.' }, getOrigin(event));
     }
 
-    const newUser = await registerUserService({ email, name, phone, domain });
+    const newUser = await registerUserService({ email, name, phone, domain, access_profile_id });
 
     return createResponse(201, { message: 'Utilizador registado e associado à conta com sucesso.', user: newUser }, getOrigin(event));
 

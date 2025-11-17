@@ -22,7 +22,7 @@ custom:
   customDomain:
     domainName: api-clients.autonomia.site
     basePath: ''
-    stage: ${opt:stage, 'prod'}
+    stage: ${opt:stage, 'staging'}
     certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
     createRoute53Record: false
   authorizer:
@@ -41,7 +41,7 @@ layers:
 provider:
   name: aws
   runtime: nodejs18.x
-  stage: ${opt:stage, 'dev'}
+  stage: ${opt:stage, 'staging'}
   region: us-east-1
   memorySize: 512
   timeout: 30
@@ -53,7 +53,7 @@ provider:
   #     - 'subnet-07184b6cfa97367e2'  # Subnet us-east-1c
   #     - 'subnet-000fbcffe0f8d9a11'  # Subnet us-east-1d
   environment:
-    NODE_ENV: ${opt:stage, 'dev'}
+    NODE_ENV: ${self:provider.stage}
     # Banco de dados principal (autonomia)
     DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
     DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
@@ -61,11 +61,12 @@ provider:
     DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
     DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
     # Banco de dados clients
-    CLIENTS_DB_HOST: ${ssm:/autonomia/clients/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
-    CLIENTS_DB_PORT: ${ssm:/autonomia/clients/db/port, '5432'}
-    CLIENTS_DB_NAME: ${ssm:/autonomia/clients/db/name, 'autonomia_clients'}
-    CLIENTS_DB_USER: ${ssm:/autonomia/clients/db/user, 'autonomia_clients_admin'}
-    CLIENTS_DB_PASSWORD: ${ssm:/autonomia/clients/db/password, ''}
+    # Usar sempre /autonomia/${stage}/clients/db/* pois ambos os databases existem em staging e prod
+    CLIENTS_DB_HOST: ${ssm:/autonomia/${self:provider.stage}/clients/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    CLIENTS_DB_PORT: ${ssm:/autonomia/${self:provider.stage}/clients/db/port, '5432'}
+    CLIENTS_DB_NAME: ${ssm:/autonomia/${self:provider.stage}/clients/db/name, 'autonomia_clients'}
+    CLIENTS_DB_USER: ${ssm:/autonomia/${self:provider.stage}/clients/db/user, 'autonomia_clients_admin'}
+    CLIENTS_DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/clients/db/password, ''}
     # Redis
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, 'autonomia-redis.lfxcgb.ng.0001.use1.cache.amazonaws.com'}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
@@ -112,7 +113,7 @@ functions:
           method: post
           cors: true
       - schedule:
-          name: unassign-inactive-contacts-schedule
+          name: unassign-inactive-contacts-schedule-${self:provider.stage}
           description: 'Executa a cada 10 minutos para desalocar contatos inativos'
           rate: rate(10 minutes)
           enabled: true

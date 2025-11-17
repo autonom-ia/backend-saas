@@ -24,7 +24,7 @@ layers:
 provider:
   name: aws
   runtime: nodejs18.x
-  stage: ${opt:stage, 'prod'}
+  stage: ${opt:stage, 'staging'}
   region: us-east-1
   environment:
     COGNITO_USER_POOL_ID: !Ref CognitoUserPool
