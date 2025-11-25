@@ -1,19 +1,19 @@
-const { updateProduct } = require("../services/product-service");
+const { updatePrompt } = require("../services/agent-prompt-service");
 const { success, error: errorResponse } = require("../utils/response");
 const { withCors } = require("../utils/cors");
 
 /**
- * Handler para atualizar um produto existente
+ * Handler para atualizar um prompt do agente
  */
-exports.handler = withCors(async (event, context) => {
+exports.handler = withCors(async (event) => {
   try {
-    const { productId } = event.pathParameters || {};
+    const { promptId } = event.pathParameters || {};
 
-    if (!productId) {
+    if (!promptId) {
       return errorResponse(
         {
           success: false,
-          message: "ID do produto é obrigatório",
+          message: "ID do prompt é obrigatório",
         },
         400,
         event
@@ -34,13 +34,13 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    const { name, description, product_type_id } = requestBody;
+    const { title, code, content } = requestBody;
 
     // Validar se pelo menos um campo foi fornecido para atualização
     if (
-      typeof name === "undefined" &&
-      typeof description === "undefined" &&
-      typeof product_type_id === "undefined"
+      typeof title === "undefined" &&
+      typeof code === "undefined" &&
+      typeof content === "undefined"
     ) {
       return errorResponse(
         {
@@ -52,25 +52,25 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    const updatedProduct = await updateProduct(productId, {
-      name,
-      description,
-      product_type_id,
+    const updatedPrompt = await updatePrompt(promptId, {
+      title,
+      code,
+      content,
     });
 
     return success(
       {
         success: true,
-        message: "Produto atualizado com sucesso",
-        data: updatedProduct,
+        message: "Prompt atualizado com sucesso",
+        data: updatedPrompt,
       },
       200,
       event
     );
   } catch (error) {
-    console.error(`Erro ao atualizar produto: ${error.message}`);
+    console.error(`Erro ao atualizar prompt: ${error.message}`);
 
-    if (error.message === "Produto não encontrado") {
+    if (error.message === "Prompt não encontrado") {
       return errorResponse(
         {
           success: false,
@@ -81,10 +81,21 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
+    if (error.message.includes("Já existe um prompt com o código")) {
+      return errorResponse(
+        {
+          success: false,
+          message: error.message,
+        },
+        409,
+        event
+      );
+    }
+
     return errorResponse(
       {
         success: false,
-        message: "Erro ao atualizar produto",
+        message: "Erro ao atualizar prompt",
         error: error.message,
       },
       500,

@@ -9,6 +9,27 @@ const allowedLocalOrigins = new Set([
   'http://127.0.0.1:5173',
 ]);
 
+function isLocalhost(origin) {
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname.toLowerCase();
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function isVercelOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname.toLowerCase();
+    // Permite qualquer domínio da Vercel (incluindo preview deployments)
+    return hostname.endsWith('.vercel.app');
+  } catch (_) {
+    return false;
+  }
+}
+
 function isAllowedAutonomiaOrigin(origin) {
   try {
     const url = new URL(origin);
@@ -22,9 +43,40 @@ function isAllowedAutonomiaOrigin(origin) {
 }
 
 function isAllowedOrigin(origin) {
-  if (!origin) return false;
-  if (allowedLocalOrigins.has(origin)) return true;
-  return isAllowedAutonomiaOrigin(origin);
+  if (!origin) {
+    console.log('[CORS] No origin provided');
+    return false;
+  }
+  
+  // Em staging, aceitar localhost e domínios da Vercel
+  const isStaging = process.env.NODE_ENV === 'staging';
+  console.log('[CORS] Origin:', origin, 'NODE_ENV:', process.env.NODE_ENV, 'isStaging:', isStaging);
+  
+  if (isStaging) {
+    if (isLocalhost(origin)) {
+      console.log('[CORS] Allowed: localhost');
+      return true;
+    }
+    if (isVercelOrigin(origin)) {
+      console.log('[CORS] Allowed: Vercel origin');
+      return true;
+    }
+  }
+  
+  // Verificar origens permitidas específicas
+  if (allowedLocalOrigins.has(origin)) {
+    console.log('[CORS] Allowed: in allowedLocalOrigins set');
+    return true;
+  }
+  
+  // Verificar origens autonomia.site
+  const isAutonomia = isAllowedAutonomiaOrigin(origin);
+  if (isAutonomia) {
+    console.log('[CORS] Allowed: autonomia.site origin');
+  } else {
+    console.log('[CORS] Denied: origin not allowed');
+  }
+  return isAutonomia;
 }
 
 function buildCorsHeaders(origin) {

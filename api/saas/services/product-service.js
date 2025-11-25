@@ -6,7 +6,10 @@ const { getDbConnection } = require('../utils/database');
  */
 const getAllProducts = async () => {
   const knex = getDbConnection();
-  return knex('product').select('*').orderBy('created_at', 'desc');
+  return knex('product')
+    .select('product.*', 'product_type.description as product_type_description', 'product_type.id as product_type_id')
+    .leftJoin('product_type', 'product.product_type_id', 'product_type.id')
+    .orderBy('product.created_at', 'desc');
 };
 
 /**
@@ -19,9 +22,10 @@ const getAllProducts = async () => {
 const getProductsForUser = async (userId) => {
   const knex = getDbConnection();
   return knex('product as p')
-    .distinct('p.*')
+    .distinct('p.*', 'product_type.description as product_type_description', 'product_type.id as product_type_id')
     .join('account as a', 'a.product_id', 'p.id')
     .join('user_accounts as ua', 'ua.account_id', 'a.id')
+    .leftJoin('product_type', 'p.product_type_id', 'product_type.id')
     .where('ua.user_id', userId)
     .orderBy('p.created_at', 'desc');
 };
@@ -73,14 +77,26 @@ const updateProduct = async (id, { name, description, product_type_id }) => {
   // Verificar se o produto existe
   await getProductById(id);
   
+  // Construir objeto de atualização apenas com campos fornecidos
+  const updateData = {
+    updated_at: knex.fn.now()
+  };
+  
+  if (typeof name !== 'undefined') {
+    updateData.name = name;
+  }
+  
+  if (typeof description !== 'undefined') {
+    updateData.description = description;
+  }
+  
+  if (typeof product_type_id !== 'undefined') {
+    updateData.product_type_id = product_type_id || null;
+  }
+  
   const [updatedProduct] = await knex('product')
     .where({ id })
-    .update({
-      name,
-      description,
-      product_type_id: typeof product_type_id === 'undefined' ? knex.raw('product_type_id') : (product_type_id || null),
-      updated_at: knex.fn.now()
-    })
+    .update(updateData)
     .returning('*');
   
   return updatedProduct;
@@ -108,5 +124,5 @@ module.exports = {
   getProductById,
   createProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
 };

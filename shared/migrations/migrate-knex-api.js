@@ -37,18 +37,66 @@ const loadKnexConfig = (dbType = DB_TYPES.DEFAULT) => {
     // Criar uma cópia da configuração base
     const config = JSON.parse(JSON.stringify(knexfile[environment]));
     
+    // Debug: verificar variáveis disponíveis
+    console.log('Variáveis de ambiente disponíveis:', {
+      hasDB_HOST: !!process.env.DB_HOST,
+      hasDB_PASSWORD: !!process.env.DB_PASSWORD,
+      hasPOSTGRES_HOST: !!process.env.POSTGRES_HOST,
+      hasPOSTGRES_PASSWORD: !!process.env.POSTGRES_PASSWORD
+    });
+    
     // Modificar a configuração com base no tipo de banco de dados
     if (dbType === DB_TYPES.CLIENTS) {
-      // Alterar o banco de dados para o banco de clientes
-      config.connection.database = process.env.CLIENTS_POSTGRES_DATABASE || 'autonomia_clients';
+      // Banco clients: usar variáveis específicas ou mapear de variáveis gerais
+      // Durante deploy, o deploy.sh injeta CLIENTS_DB_* do SSM (tenta staging/clients primeiro, depois clients)
+      // Localmente, pode usar CLIENTS_POSTGRES_* do .env
+      // Prioridade: CLIENTS_DB_* (SSM) > CLIENTS_POSTGRES_* (.env) > POSTGRES_* (.env) > config padrão
+      config.connection.host = process.env.CLIENTS_DB_HOST || process.env.CLIENTS_POSTGRES_HOST || process.env.POSTGRES_HOST || config.connection.host;
+      config.connection.port = process.env.CLIENTS_DB_PORT || process.env.CLIENTS_POSTGRES_PORT || process.env.POSTGRES_PORT || config.connection.port;
+      config.connection.database = process.env.CLIENTS_DB_NAME || process.env.CLIENTS_POSTGRES_DATABASE || 'autonomia_clients';
+      config.connection.user = process.env.CLIENTS_DB_USER || process.env.CLIENTS_POSTGRES_USER || 'autonomia_clients_admin';
+      config.connection.password = process.env.CLIENTS_DB_PASSWORD || process.env.CLIENTS_POSTGRES_PASSWORD || config.connection.password;
       
-      // Usar credenciais específicas para o banco de dados de clientes, se disponíveis
-      config.connection.user = process.env.CLIENTS_POSTGRES_USER || 'autonomia_clients_admin';
-      config.connection.password = process.env.CLIENTS_POSTGRES_PASSWORD || config.connection.password;
+      // SSL
+      const sslEnabled = process.env.CLIENTS_DB_SSL_ENABLED || process.env.POSTGRES_SSL;
+      config.connection.ssl = sslEnabled === 'true' ? { rejectUnauthorized: false } : false;
       
       // Alterar o diretório de migrações e a tabela de controle
       config.migrations.directory = './shared/migrations/knex-clients';
       config.migrations.tableName = 'knex_migrations_clients';
+    } else {
+      // Banco principal: mapear de DB_* (usado pelo serverless) para POSTGRES_* (usado pelo knexfile)
+      // Durante deploy, o deploy.sh injeta DB_* do SSM
+      // Localmente, usa POSTGRES_* do .env
+      if (process.env.DB_HOST) {
+        // Mapear variáveis DB_* (do SSM) para configuração do Knex
+        config.connection.host = process.env.DB_HOST;
+        config.connection.port = process.env.DB_PORT || config.connection.port || 5432;
+        config.connection.database = process.env.DB_NAME || config.connection.database || 'autonomia_db';
+        config.connection.user = process.env.DB_USER;
+        config.connection.password = process.env.DB_PASSWORD;
+        const sslEnabled = process.env.DB_SSL_ENABLED;
+        config.connection.ssl = sslEnabled === 'true' ? { rejectUnauthorized: false } : false;
+        
+        console.log('Configuração mapeada de DB_* (SSM):', {
+          host: config.connection.host,
+          database: config.connection.database,
+          user: config.connection.user,
+          hasPassword: !!config.connection.password,
+          ssl: config.connection.ssl
+        });
+      } else if (process.env.POSTGRES_HOST) {
+        // Se tiver POSTGRES_* (do .env), usar diretamente
+        // O knexfile já carrega essas variáveis, mas garantimos que estão corretas
+        config.connection.host = process.env.POSTGRES_HOST;
+        config.connection.port = process.env.POSTGRES_PORT || config.connection.port;
+        config.connection.database = process.env.POSTGRES_DATABASE || config.connection.database;
+        config.connection.user = process.env.POSTGRES_USER;
+        config.connection.password = process.env.POSTGRES_PASSWORD;
+        const sslEnabled = process.env.POSTGRES_SSL;
+        config.connection.ssl = sslEnabled === 'true' ? { rejectUnauthorized: false } : false;
+      }
+      // Se não tiver nenhum, o knexfile usa valores padrão ou do .env já carregado
     }
     
     return config;

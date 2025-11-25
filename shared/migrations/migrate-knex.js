@@ -1,5 +1,13 @@
 /**
  * Script para executar migrações do Knex via linha de comando
+ * 
+ * IMPORTANTE: Este script usa variáveis de ambiente que podem vir de:
+ * - Arquivo .env (desenvolvimento local)
+ * - SSM (durante deploy - o deploy.sh busca SSM e injeta como variáveis de ambiente)
+ * 
+ * O knexfile.js já lê de process.env.POSTGRES_*, então basta garantir que as variáveis
+ * estejam disponíveis (seja do .env ou do SSM que o deploy.sh injetou).
+ * 
  * Uso:
  *   node migrate-knex.js                # Executar migrações pendentes no banco padrão
  *   node migrate-knex.js --clients      # Executar migrações pendentes no banco de clientes
@@ -9,7 +17,18 @@
  *   node migrate-knex.js --status --clients # Verificar status das migrações no banco de clientes
  */
 
-require('dotenv').config({ path: '../../.env' });
+const path = require('path');
+const fs = require('fs');
+
+// Carregar .env apenas se as variáveis não estiverem já definidas (desenvolvimento local)
+// Durante deploy, o deploy.sh já injeta as variáveis do SSM
+if (!process.env.POSTGRES_HOST && !process.env.DB_HOST) {
+  const envPath = path.resolve(__dirname, '../../.env');
+  if (fs.existsSync(envPath)) {
+    require('dotenv').config({ path: envPath });
+  }
+}
+
 const { runMigrations, rollbackLastMigration, getStatus, DB_TYPES } = require('./migrate-knex-api');
 
 // Analisar argumentos da linha de comando

@@ -11,13 +11,13 @@ exports.handler = async (event) => {
     const productId = qs.productId || qs.product_id;
     const domain = qs.domain;
 
-    // Aceita pelo menos um filtro
-    if (!productId && !domain) {
-      return errorResponse({
-        success: false,
-        message: 'Pelo menos um parâmetro é obrigatório: productId ou domain'
-      }, 400, event);
-    }
+    // // Aceita pelo menos um filtro
+    // if (!productId && !domain) {
+    //   return errorResponse({
+    //     success: false,
+    //     message: 'Pelo menos um parâmetro é obrigatório: productId ou domain'
+    //   }, 400, event);
+    // }
 
     console.log(`Listando contas com filtros:`, { productId, domain });
     
