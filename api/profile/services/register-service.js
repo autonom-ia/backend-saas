@@ -90,10 +90,10 @@ const registerUser = async ({ email, name, phone, domain, access_profile_id }) =
         throw new Error(`Perfil de acesso não encontrado (ID: ${access_profile_id}).`);
       }
       
-      await transaction('user_access_profiles').insert({
-        user_id: newUser.id,
+        await transaction('user_access_profiles').insert({
+      user_id: newUser.id,
         access_profile_id: profile.id,
-      });
+    });
     }
 
     return newUser;

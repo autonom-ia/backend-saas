@@ -9,7 +9,7 @@ const { getDbConnection } = require('../utils/database');
  */
 const getAllAccounts = async (filters = {}) => {
   const knex = getDbConnection();
-  const query = knex('account').select('*');
+  const query = knex('account').select('account.*', 'product.name as product_name').join('product', 'account.product_id', 'product.id');
   
   if (filters.productId) {
     query.where({ product_id: filters.productId });

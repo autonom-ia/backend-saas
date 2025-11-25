@@ -373,6 +373,89 @@ functions:
                 parameterId: true
           authorizer: ${self:custom.authorizer}
 
+  listAgentPrompts:
+    handler: handlers/list-agent-prompts.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AgentPrompts
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                productId: true
+          authorizer: ${self:custom.authorizer}
+
+  getAgentPrompt:
+    handler: handlers/get-agent-prompt.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AgentPrompts/{promptId}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                promptId: true
+          authorizer: ${self:custom.authorizer}
+
+  createAgentPrompt:
+    handler: handlers/create-agent-prompt.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AgentPrompts
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  updateAgentPrompt:
+    handler: handlers/update-agent-prompt.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AgentPrompts/{promptId}
+          method: put
+          cors: true
+          request:
+            parameters:
+              paths:
+                promptId: true
+          authorizer: ${self:custom.authorizer}
+
+  deleteAgentPrompt:
+    handler: handlers/delete-agent-prompt.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AgentPrompts/{promptId}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                promptId: true
+          authorizer: ${self:custom.authorizer}
+
+  reactivateAgentPrompt:
+    handler: handlers/reactivate-agent-prompt.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AgentPrompts/{promptId}/reactivate
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                promptId: true
+          authorizer: ${self:custom.authorizer}
+
+  listAgentPromptsStandard:
+    handler: handlers/list-agent-prompts-standard.handler
+    events:
+      - http:
+          path: Autonomia/Saas/AgentPromptsStandard
+          method: get
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
   listAccountParameters:
     handler: handlers/list-account-parameters.handler
     events:

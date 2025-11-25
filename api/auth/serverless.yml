@@ -27,6 +27,7 @@ provider:
   stage: ${opt:stage, 'staging'}
   region: us-east-1
   environment:
+    NODE_ENV: ${self:provider.stage}
     COGNITO_USER_POOL_ID: !Ref CognitoUserPool
     COGNITO_USER_POOL_CLIENT_ID: !Ref CognitoUserPoolClient
   iam:

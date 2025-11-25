@@ -196,6 +196,17 @@ try:
             if not skip_custom_domain:
                 new_lines.append(line)
         content = '\n'.join(new_lines)
+        
+        # Remover cors: true das rotas HTTP em staging (CORS gerenciado na Lambda)
+        # Remove linhas que contenham "cors: true" com qualquer indentação
+        lines = content.split('\n')
+        new_lines = []
+        for line in lines:
+            # Pular linhas que são apenas "cors: true" (com qualquer indentação)
+            if re.match(r'^\s*cors:\s*true\s*$', line):
+                continue
+            new_lines.append(line)
+        content = '\n'.join(new_lines)
     
     # Verificar se realmente removeu
     if STAGE == "staging":

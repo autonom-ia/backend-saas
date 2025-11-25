@@ -103,8 +103,12 @@ functions:
       - http:
           path: Autonomia/Evolution/CreateInstance
           method: post
-          cors: true
+          cors: false
           authorizer: ${self:custom.authorizer}
+      - http:
+          path: Autonomia/Evolution/CreateInstance
+          method: options
+          cors: false
   setChatwoot:
     handler: handlers/set-chatwoot.handler
     layers:

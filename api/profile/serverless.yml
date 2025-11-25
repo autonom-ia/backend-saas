@@ -93,8 +93,12 @@ functions:
     events:
       - http:
           path: Autonomia/Profile/Register
+          method: options
+          cors: false
+      - http:
+          path: Autonomia/Profile/Register
           method: post
-          cors: true
+          cors: false
           
   getUserByEmail:
     handler: handlers/get-user-by-email.handler
@@ -103,8 +107,12 @@ functions:
     events:
       - http:
           path: Autonomia/Profile/Users/email
+          method: options
+          cors: false
+      - http:
+          path: Autonomia/Profile/Users/email
           method: get
-          cors: true
+          cors: false
           request:
             parameters:
               querystrings:

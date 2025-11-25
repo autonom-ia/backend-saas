@@ -32,10 +32,20 @@ async function getParameterValue(accountId, paramName, options = {}) {
   
   // 2. Tentar account_parameter
   for (const name of allNames) {
-    const accountParam = await db('account_parameter')
+    // Primeiro tenta buscar por name exato
+    let accountParam = await db('account_parameter')
       .select('value')
       .where({ account_id: accountId, name })
       .first();
+    
+    // Se não encontrou por name, tenta buscar por short_description
+    if (!accountParam) {
+      accountParam = await db('account_parameter')
+        .select('value')
+        .where({ account_id: accountId })
+        .whereRaw('LOWER(short_description) = LOWER(?)', [name])
+        .first();
+    }
     
     if (accountParam && accountParam.value && String(accountParam.value).trim()) {
       console.log(`[getParameterValue] Encontrado em account_parameter: ${paramName} (alias: ${name})`);
@@ -46,10 +56,20 @@ async function getParameterValue(accountId, paramName, options = {}) {
   // 3. Se não encontrou em account, buscar em product_parameter
   if (account.product_id) {
     for (const name of allNames) {
-      const productParam = await db('product_parameter')
+      // Primeiro tenta buscar por name exato
+      let productParam = await db('product_parameter')
         .select('value')
         .where({ product_id: account.product_id, name })
         .first();
+      
+      // Se não encontrou por name, tenta buscar por short_description
+      if (!productParam) {
+        productParam = await db('product_parameter')
+          .select('value')
+          .where({ product_id: account.product_id })
+          .whereRaw('LOWER(short_description) = LOWER(?)', [name])
+          .first();
+      }
       
       if (productParam && productParam.value && String(productParam.value).trim()) {
         console.log(`[getParameterValue] Encontrado em product_parameter (fallback): ${paramName} (alias: ${name})`);
