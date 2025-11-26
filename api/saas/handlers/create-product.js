@@ -23,7 +23,7 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    const { name, description, product_type_id } = requestBody;
+    const { name, description, product_type_id, domain } = requestBody;
 
     // Validação dos campos obrigatórios
     if (!name) {
@@ -37,12 +37,24 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
+    if (!domain) {
+      return errorResponse(
+        {
+          success: false,
+          message: "Domínio é obrigatório para criar o produto",
+        },
+        400,
+        event
+      );
+    }
+
     // description opcional
 
     const newProduct = await createProduct({
       name,
       description,
       product_type_id,
+      domain,
     });
 
     // Criar parâmetros para o novo produto baseado nos padrões (product_parameters_standard)

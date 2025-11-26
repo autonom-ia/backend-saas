@@ -8,20 +8,24 @@ const ensureUserIdForNonAdmin = (isAdmin, userId) => {
   throw new Error('userId is required for non-admin queries');
 };
 
+// Para a listagem de domínios de monitoring, passamos a considerar
+// o domínio de company (company.domain) e o relacionamento user -> user_company -> company.
+// Admin: vê todos os domains de company.
+// Não admin: vê apenas domains das companies associadas em user_company.
 const buildDomainQuery = (db, { isAdmin, userId }) => {
   ensureUserIdForNonAdmin(isAdmin, userId);
 
-  const baseQuery = db('account')
-    .distinct({ domain: 'account.domain' })
-    .whereNotNull('account.domain')
-    .where('account.domain', '<>', '')
-    .orderBy('account.domain', 'asc');
+  const baseQuery = db('company')
+    .distinct({ domain: 'company.domain' })
+    .whereNotNull('company.domain')
+    .where('company.domain', '<>', '')
+    .orderBy('company.domain', 'asc');
 
   if (isAdmin) return baseQuery;
 
   return baseQuery
-    .join('user_accounts as ua', 'ua.account_id', 'account.id')
-    .where('ua.user_id', userId);
+    .join('user_company as uc', 'uc.company_id', 'company.id')
+    .where('uc.user_id', userId);
 };
 
 const mapDomains = (rows) => rows.map((row) => row.domain);

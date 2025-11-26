@@ -1,5 +1,8 @@
 const { getDbConnection } = require('../utils/database');
 
+// Mesmo perfil admin usado no módulo clients
+const ADMIN_PROFILE_ID = 'b36dd047-1634-4a89-97f3-127688104dd0';
+
 /**
  * Lista contas filtrando por product_id ou domain
  * @param {Object} filters - Filtros de busca
@@ -101,8 +104,46 @@ const deleteAccount = async (id) => {
   return true;
 };
 
+// Retorna contexto de acesso do usuário (admin ou não) usando user_access_profiles
+const getUserAccessContext = async (knex, userId) => {
+  const profileIds = await knex('user_access_profiles')
+    .where({ user_id: userId })
+    .pluck('access_profile_id');
+  const isAdmin = Array.isArray(profileIds) && profileIds.includes(ADMIN_PROFILE_ID);
+  return { isAdmin };
+};
+
+// Lista apenas as contas acessíveis ao usuário.
+// Admin: mesmo comportamento de getAllAccounts.
+// Não admin: filtra por user_accounts.user_id = userId.
+const getAccountsForUser = async (userId, filters = {}) => {
+  const knex = getDbConnection();
+  const { isAdmin } = await getUserAccessContext(knex, userId);
+
+  let query = knex('account')
+    .select('account.*', 'product.name as product_name')
+    .join('product', 'account.product_id', 'product.id');
+
+  if (!isAdmin) {
+    query = query
+      .join('user_accounts as ua', 'ua.account_id', 'account.id')
+      .where('ua.user_id', userId);
+  }
+
+  if (filters.productId) {
+    query.where({ product_id: filters.productId });
+  }
+
+  if (filters.domain) {
+    query.where({ domain: filters.domain });
+  }
+
+  return query.orderBy('account.created_at', 'desc');
+};
+
 module.exports = {
   getAllAccounts,
+  getAccountsForUser,
   getAccountById,
   createAccount,
   updateAccount,
