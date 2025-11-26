@@ -36,7 +36,9 @@ function isAllowedAutonomiaOrigin(origin) {
     const { protocol, hostname } = url;
     if (protocol !== 'https:' && protocol !== 'http:') return false;
     if (hostname === 'autonomia.site') return true;
-    return hostname.endsWith('.autonomia.site');
+    if (hostname === 'hub2you.ai') return true;
+    if (hostname === 'portal-autonomia.vercel.app') return true;
+    return hostname.endsWith('.autonomia.site') || hostname.endsWith('.hub2you.ai');
   } catch (_) {
     return false;
   }
