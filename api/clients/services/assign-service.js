@@ -64,6 +64,24 @@ async function createChatwootDbConnection(systemAccountId) {
   }
 }
 
+async function shouldAssignOnlyActiveUsers(systemAccountId) {
+  try {
+    const db = getDbConnection();
+    const row = await db('account_parameter')
+      .select('value')
+      .where({ account_id: systemAccountId, name: 'assign_only_active_users' })
+      .first();
+
+    const raw = (row && row.value ? String(row.value) : '').trim().toUpperCase();
+    if (!raw) return true;
+    if (raw === 'FALSE') return false;
+    return true;
+  } catch (error) {
+    console.error('Erro ao ler parâmetro assign_only_active_users:', error);
+    return true;
+  }
+}
+
 /**
  * Retorna detalhes dos usuários logados (online): id, name, email, open_conversations
  * @param {number} chatwootAccountId - ID da conta do Chatwoot
@@ -701,10 +719,19 @@ const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactI
       };
     }
 
-    // 3. Obter agentes disponíveis e online
-    const inboxAgentIds = await getAvailableAgentsForInbox(chatwootDb, inboxId);
-    const onlineAgentIds = await getOnlineAgents(chatwootAccountId, systemAccountId);
-    const availableAgentIds = inboxAgentIds.filter(id => onlineAgentIds.includes(id));
+    // 3. Obter agentes disponíveis considerando configuração assign_only_active_users
+    const activeOnly = await shouldAssignOnlyActiveUsers(systemAccountId);
+    let availableAgentIds;
+    if (activeOnly) {
+      const inboxAgentIds = await getAvailableAgentsForInbox(chatwootDb, inboxId);
+      const onlineAgentIds = await getOnlineAgents(chatwootAccountId, systemAccountId);
+      availableAgentIds = inboxAgentIds.filter(id => onlineAgentIds.includes(id));
+    } else {
+      // Quando assign_only_active_users = FALSE, considerar todos os usuários da tabela users
+      const allUsers = await chatwootDb('users').select('id');
+      availableAgentIds = allUsers.map(u => u.id);
+      console.log(`assign_only_active_users=FALSE -> usando todos os usuários da tabela users (${availableAgentIds.length})`);
+    }
 
     if (availableAgentIds.length === 0) {
       console.log('Nenhum agente online disponível para esta caixa de entrada. Atribuindo para o usuário padrão (1).');
