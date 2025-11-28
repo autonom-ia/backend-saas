@@ -2,6 +2,7 @@ const { getDbConnection } = require('../utils/database');
 const { createAccount } = require('../services/account-service');
 const { createInbox } = require('../services/inbox-service');
 const { success, error: errorResponse } = require('../utils/response');
+const { getUserFromEvent } = require('../utils/auth-user');
 
 /**
  * Handler para criar uma conta
@@ -15,7 +16,7 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { social_name, name, email, phone, product_id, document, instance, conversation_funnel_id, domain, user_id } = body;
+    const { social_name, name, email, phone, product_id, document, instance, conversation_funnel_id, domain } = body;
 
     if (!product_id) {
       return errorResponse({ success: false, message: 'product_id é obrigatório' }, 400);
@@ -63,26 +64,31 @@ exports.handler = async (event) => {
       // Não interrompe a criação da conta
     }
 
-    // Relaciona automaticamente a conta ao usuário criador, quando aplicável
+    // Relaciona automaticamente a conta ao usuário criador, quando aplicável, usando o usuário do JWT
     try {
-      if (user_id) {
+      const userContext = await getUserFromEvent(event);
+      const userId = userContext && userContext.user && userContext.user.id;
+
+      if (userId) {
         const knex = getDbConnection();
-        const user = await knex('users').where({ id: user_id }).first();
+        const user = await knex('users').where({ id: userId }).first();
         if (!user) {
-          console.warn('[create-account] user_id informado não encontrado:', user_id);
+          console.warn('[create-account] Usuário do JWT não encontrado na tabela users:', userId);
         } else {
           const EXCLUDED_PROFILE = 'b36dd047-1634-4a89-97f3-127688104dd0';
           // Buscar perfis do usuário e verificar se possui o perfil excluído
           const profiles = await knex('user_access_profiles')
-            .where({ user_id })
+            .where({ user_id: userId })
             .pluck('access_profile_id');
           const hasExcluded = Array.isArray(profiles) && profiles.includes(EXCLUDED_PROFILE);
           if (!hasExcluded) {
-            await knex('user_accounts').insert({ user_id, account_id: created.id });
+            await knex('user_accounts').insert({ user_id: userId, account_id: created.id });
           } else {
             console.log('[create-account] Usuário possui perfil excluído, não relacionando automaticamente user->account');
           }
         }
+      } else {
+        console.warn('[create-account] Usuário não resolvido a partir do JWT; não será criado vínculo user->account');
       }
     } catch (relErr) {
       console.error('[create-account] Falha ao relacionar usuário e conta:', relErr?.message || relErr);

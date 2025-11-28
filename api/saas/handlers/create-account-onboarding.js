@@ -2,6 +2,7 @@ const { getDbConnection } = require('../utils/database');
 const { createAccount } = require('../services/account-service');
 const { createInbox } = require('../services/inbox-service');
 const { success, error: errorResponse } = require('../utils/response');
+const { getUserFromEvent } = require('../utils/auth-user');
 
 /**
  * Handler para criar uma conta via fluxo de onboarding
@@ -134,25 +135,36 @@ exports.handler = async (event) => {
       // Não interrompe a criação da conta
     }
 
-    // Relacionar usuário à conta (se user_id fornecido)
+    // Relacionar usuário à conta usando preferencialmente o usuário do JWT, com fallback em user_id do body
     try {
-      if (user_id) {
-        const user = await knex('users').where({ id: user_id }).first();
+      const userContext = await getUserFromEvent(event);
+      const jwtUserId = userContext && userContext.user && userContext.user.id;
+      const effectiveUserId = jwtUserId || user_id;
+
+      if (effectiveUserId) {
+        const user = await knex('users').where({ id: effectiveUserId }).first();
         if (user) {
           const EXCLUDED_PROFILE = 'b36dd047-1634-4a89-97f3-127688104dd0';
           const profiles = await knex('user_access_profiles')
-            .where({ user_id })
+            .where({ user_id: effectiveUserId })
             .pluck('access_profile_id');
           const hasExcluded = Array.isArray(profiles) && profiles.includes(EXCLUDED_PROFILE);
-          
+
           if (!hasExcluded) {
-            await knex('user_accounts').insert({ user_id, account_id: accountId });
-            console.log('[create-account-onboarding] Usuário relacionado à conta');
+            await knex('user_accounts').insert({ user_id: effectiveUserId, account_id: accountId });
+            console.log('[create-account-onboarding] Usuário relacionado à conta (effectiveUserId):', effectiveUserId);
+          } else {
+            console.log('[create-account-onboarding] Usuário possui perfil excluído, não relacionando automaticamente user->account');
           }
+        } else {
+          console.warn('[create-account-onboarding] Usuário não encontrado para effectiveUserId:', effectiveUserId);
         }
+      } else {
+        console.warn('[create-account-onboarding] Nenhum usuário resolvido (JWT ou body user_id); não será criado vínculo user->account');
       }
     } catch (relErr) {
       console.error('[create-account-onboarding] Falha ao relacionar usuário:', relErr?.message || relErr);
+      // Não interrompe a criação da conta
     }
 
     return success({ 
