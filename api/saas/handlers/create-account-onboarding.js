@@ -2,6 +2,7 @@ const { getDbConnection } = require('../utils/database');
 const { createAccount } = require('../services/account-service');
 const { createInbox } = require('../services/inbox-service');
 const { success, error: errorResponse } = require('../utils/response');
+const { getUserFromEvent } = require('../utils/auth-user');
 
 /**
  * Handler para criar uma conta via fluxo de onboarding
@@ -21,9 +22,18 @@ exports.handler = async (event) => {
       accountEmail,
       accountPhone,
       productId,
-      parameters = {},
-      user_id 
+      parameters = {}
     } = body;
+
+    let userIdFromJwt = null;
+    try {
+      const auth = getUserFromEvent(event);
+      if (auth && auth.user && auth.user.id) {
+        userIdFromJwt = auth.user.id;
+      }
+    } catch (authErr) {
+      console.error('[create-account-onboarding] Erro ao obter usuário do JWT:', authErr?.message || authErr);
+    }
 
     // Validações
     if (!productId) {
@@ -134,19 +144,19 @@ exports.handler = async (event) => {
       // Não interrompe a criação da conta
     }
 
-    // Relacionar usuário à conta (se user_id fornecido)
+    // Relacionar usuário à conta (usando usuário do JWT, quando disponível)
     try {
-      if (user_id) {
-        const user = await knex('users').where({ id: user_id }).first();
+      if (userIdFromJwt) {
+        const user = await knex('users').where({ id: userIdFromJwt }).first();
         if (user) {
           const EXCLUDED_PROFILE = 'b36dd047-1634-4a89-97f3-127688104dd0';
           const profiles = await knex('user_access_profiles')
-            .where({ user_id })
+            .where({ user_id: userIdFromJwt })
             .pluck('access_profile_id');
           const hasExcluded = Array.isArray(profiles) && profiles.includes(EXCLUDED_PROFILE);
           
           if (!hasExcluded) {
-            await knex('user_accounts').insert({ user_id, account_id: accountId });
+            await knex('user_accounts').insert({ user_id: userIdFromJwt, account_id: accountId });
             console.log('[create-account-onboarding] Usuário relacionado à conta');
           }
         }
