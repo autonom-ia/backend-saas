@@ -21,6 +21,7 @@ const normalizeDomain = (domain) => {
 const registerUser = async ({ email, name, phone, domain, access_profile_id }) => {
   const knex = getDbConnection();
   let accountId;
+  let companyId;
 
   // 1. Encontrar a conta pelo domínio
   try {
@@ -55,6 +56,14 @@ const registerUser = async ({ email, name, phone, domain, access_profile_id }) =
       throw new Error(`Nenhuma conta encontrada para o domínio: ${domain} (normalizado: ${normalizedDomain}). Domínios existentes no banco: ${domainsList}`);
     }
     accountId = account.id;
+
+    // Descobrir a company relacionada via product.company_id
+    if (account.product_id) {
+      const product = await knex('product').where({ id: account.product_id }).first();
+      if (product && product.company_id) {
+        companyId = product.company_id;
+      }
+    }
   } catch (err) {
     console.error('Erro ao procurar a conta:', err);
     // Retornar a mensagem de erro original se for mais específica
@@ -64,7 +73,7 @@ const registerUser = async ({ email, name, phone, domain, access_profile_id }) =
     throw new Error(`Falha ao verificar o domínio da conta: ${err.message}`);
   }
 
-  // 2. Criar o utilizador e a associação numa transação 
+  // 2. Criar o utilizador e as associações numa transação 
   // Incluido para o deploy
     return knex.transaction(async (transaction) => {
     // Inserir na tabela 'user'
@@ -76,11 +85,13 @@ const registerUser = async ({ email, name, phone, domain, access_profile_id }) =
       })
       .returning('*');
 
-    // Associar na tabela 'user_account'
-        await transaction('user_accounts').insert({
-      user_id: newUser.id,
-      account_id: accountId,
-    });
+    // Associar utilizador à empresa, se identificada
+    if (companyId) {
+      await transaction('user_company').insert({
+        user_id: newUser.id,
+        company_id: companyId,
+      });
+    }
 
     // Adicionar perfil de acesso padrão (se fornecido)
     if (access_profile_id) {

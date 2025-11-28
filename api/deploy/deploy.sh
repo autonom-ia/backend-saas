@@ -7,7 +7,9 @@
 # Exemplo: ./deploy.sh saas  (padrão: staging)
 
 # Configurar perfil AWS para este projeto
-export AWS_PROFILE=autonomia
+# Se AWS_PROFILE já estiver definido no ambiente, respeitar esse valor.
+# Caso contrário, usar 'autonomia' como padrão para compatibilidade.
+: "${AWS_PROFILE:=autonomia}"
 
 # Definindo cores para output
 RED='\033[0;31m'
@@ -66,6 +68,17 @@ API_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
 WORKSPACE_ROOT="$( cd "$API_DIR/.." && pwd )"
 MODULE_DIR="$API_DIR/$MODULE"
 DIST_DIR="$MODULE_DIR/dist"
+
+# Carregar .env da raiz do backend (WORKSPACE_ROOT/backend/.env) se existir,
+# exportando as variáveis para o ambiente do shell antes de qualquer uso
+BACKEND_ENV_FILE="$WORKSPACE_ROOT/.env"
+if [ -f "$BACKEND_ENV_FILE" ]; then
+  echo -e "${YELLOW}Carregando variáveis do .env da raiz do backend...${NC}"
+  set -a
+  # shellcheck disable=SC1090
+  source "$BACKEND_ENV_FILE"
+  set +a
+fi
 
 # Aviso especial para produção
 if [ "$STAGE" = "prod" ]; then
@@ -563,43 +576,57 @@ echo -e "${BLUE}Build completado com sucesso.${NC}"
 echo -e "${BLUE}Verificando migrações pendentes...${NC}"
 cd $API_DIR/..
 
-# Buscar parâmetros SSM e injetar como variáveis de ambiente (se necessário)
+# Buscar parâmetros SSM e injetar como variáveis de ambiente (somente se não houver .env/variáveis locais)
 if [ "$STAGE" = "staging" ] || [ "$STAGE" = "prod" ]; then
-  echo -e "${YELLOW}Carregando parâmetros SSM para verificação...${NC}"
-  
-  # Banco principal
-  DB_HOST=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/host" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
-  DB_PORT=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/port" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text 2>/dev/null || echo "5432")
-  DB_NAME=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/name" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text 2>/dev/null || echo "autonomia_db")
-  DB_USER=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/user" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
-  DB_PASSWORD=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/password" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
-  DB_SSL_ENABLED=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/ssl-enabled" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text 2>/dev/null || echo "false")
-  
-  export DB_HOST
-  export DB_PORT
-  export DB_NAME
-  export DB_USER
-  export DB_PASSWORD
-  export DB_SSL_ENABLED
-  
-    # Banco clients
+  # Apenas carrega do SSM se DB_HOST/POSTGRES_HOST ainda não estiverem definidos
+  if [ -z "$DB_HOST" ] && [ -z "$POSTGRES_HOST" ]; then
+    echo -e "${YELLOW}Carregando parâmetros SSM para banco principal...${NC}"
+    # Banco principal
+    DB_HOST=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/host" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
+    DB_PORT=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/port" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text 2>/dev/null || echo "5432")
+    DB_NAME=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/name" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text 2>/dev/null || echo "autonomia_db")
+    DB_USER=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/user" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
+    DB_PASSWORD=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/password" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
+    DB_SSL_ENABLED=$(aws ssm get-parameter --name "/autonomia/${STAGE}/db/ssl-enabled" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text 2>/dev/null || echo "false")
+
+    export DB_HOST
+    export DB_PORT
+    export DB_NAME
+    export DB_USER
+    export DB_PASSWORD
+    export DB_SSL_ENABLED
+  else
+    echo -e "${YELLOW}Variáveis de banco principal já definidas no ambiente (.env ou externo); ignorando SSM.${NC}"
+  fi
+
+  # Banco clients: só carrega se CLIENTS_DB_HOST ainda não estiver definido
+  if [ -z "$CLIENTS_DB_HOST" ]; then
+    echo -e "${YELLOW}Carregando parâmetros SSM para banco clients...${NC}"
     # Usar sempre /autonomia/${STAGE}/clients/db/* pois ambos os databases existem em staging e prod
-    CLIENTS_DB_HOST=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/host" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
-    CLIENTS_DB_PORT=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/port" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text 2>/dev/null || echo "5432")
-    CLIENTS_DB_NAME=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/name" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text 2>/dev/null || echo "autonomia_clients")
-    CLIENTS_DB_USER=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/user" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
-    CLIENTS_DB_PASSWORD=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/password" --region us-east-1 --profile autonomia --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
-  
-  export CLIENTS_DB_HOST
-  export CLIENTS_DB_PORT
-  export CLIENTS_DB_NAME
-  export CLIENTS_DB_USER
-  export CLIENTS_DB_PASSWORD
+    CLIENTS_DB_HOST=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/host" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
+    CLIENTS_DB_PORT=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/port" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text 2>/dev/null || echo "5432")
+    CLIENTS_DB_NAME=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/name" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text 2>/dev/null || echo "autonomia_clients")
+    CLIENTS_DB_USER=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/user" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
+    CLIENTS_DB_PASSWORD=$(aws ssm get-parameter --name "/autonomia/${STAGE}/clients/db/password" --region us-east-1 --profile "$AWS_PROFILE" --query "Parameter.Value" --output text --with-decryption 2>/dev/null)
+
+    export CLIENTS_DB_HOST
+    export CLIENTS_DB_PORT
+    export CLIENTS_DB_NAME
+    export CLIENTS_DB_USER
+    export CLIENTS_DB_PASSWORD
+  else
+    echo -e "${YELLOW}Variáveis de banco clients já definidas no ambiente (.env ou externo); ignorando SSM.${NC}"
+  fi
 fi
 
 # Verificar migrações pendentes
-export NODE_ENV="$STAGE"
-echo -e "${BLUE}Verificando migrações pendentes em ambos os bancos...${NC}"
+# Mapear STAGE para NODE_ENV do Knex
+if [ "$STAGE" = "prod" ]; then
+  export NODE_ENV="production"
+else
+  export NODE_ENV="$STAGE"
+fi
+echo -e "${BLUE}Verificando migrações pendentes em ambos os bancos... (NODE_ENV=$NODE_ENV)${NC}"
 
 # Capturar apenas a última linha (JSON) e erros separadamente
 MIGRATION_OUTPUT=$(node shared/migrations/check-pending-migrations.js 2>&1)

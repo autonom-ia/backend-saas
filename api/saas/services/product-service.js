@@ -12,21 +12,14 @@ const getAllProducts = async () => {
     .orderBy('product.created_at', 'desc');
 };
 
-/**
- * Busca produtos relacionados às contas do usuário
- * user_id refere-se ao ID na tabela users (mesmo usado em user_accounts)
- * Retorna produtos distintos associados às contas do usuário
- * @param {string} userId
- * @returns {Promise<Array>}
- */
 const getProductsForUser = async (userId) => {
   const knex = getDbConnection();
   return knex('product as p')
     .distinct('p.*', 'product_type.description as product_type_description', 'product_type.id as product_type_id')
-    .join('account as a', 'a.product_id', 'p.id')
-    .join('user_accounts as ua', 'ua.account_id', 'a.id')
+    .join('company as c', 'p.company_id', 'c.id')
+    .join('user_company as uc', 'uc.company_id', 'c.id')
     .leftJoin('product_type', 'p.product_type_id', 'product_type.id')
-    .where('ua.user_id', userId)
+    .where('uc.user_id', userId)
     .orderBy('p.created_at', 'desc');
 };
 
@@ -48,17 +41,29 @@ const getProductById = async (id) => {
 
 /**
  * Cria um novo produto
+ * A partir do domínio informado, localiza a company correspondente e preenche company_id.
  * @param {Object} productData - Dados do produto
+ * @param {string} productData.domain - Domínio associado à empresa do produto
  * @returns {Promise<Object>} Produto criado
  */
-const createProduct = async ({ name, description, product_type_id }) => {
+const createProduct = async ({ name, description, product_type_id, domain }) => {
   const knex = getDbConnection();
+
+  let companyId = null;
+  if (domain) {
+    const company = await knex('company').where({ domain }).first();
+    if (!company) {
+      throw new Error(`Empresa não encontrada para o domínio: ${domain}`);
+    }
+    companyId = company.id;
+  }
   
   const [newProduct] = await knex('product')
     .insert({
       name,
       description,
-      product_type_id: product_type_id || null
+      product_type_id: product_type_id || null,
+      company_id: companyId,
     })
     .returning('*');
   

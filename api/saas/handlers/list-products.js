@@ -3,9 +3,9 @@ const {
   getProductsForUser,
 } = require("../services/product-service");
 const { success, error: errorResponse } = require("../utils/response");
-const { getDbConnection } = require("../utils/database");
 const { withCors } = require("../utils/cors");
 const { getAdminProfile } = require("../services/access-profile-service");
+const { getUserFromEvent } = require("../utils/auth-user");
 
 /**
  * Handler para listar todos os produtos
@@ -14,14 +14,8 @@ exports.handler = withCors(async (event, context) => {
   try {
     const adminProfile = (await getAdminProfile()) || {};
 
-    // Extrair email do usuário autenticado via Cognito Authorizer
-    const claims =
-      event?.requestContext?.authorizer?.claims ||
-      event?.requestContext?.authorizer?.jwt?.claims ||
-      {};
-    const email = claims.email || claims["cognito:username"] || null;
-
-    if (!email) {
+    const resolved = await getUserFromEvent(event);
+    if (!resolved) {
       return errorResponse(
         { success: false, message: "Não autenticado" },
         401,
@@ -29,19 +23,11 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    // Buscar usuário no banco para obter id
-    const knex = getDbConnection();
-    const user = await knex("users").where({ email }).first();
-
-    if (!user) {
-      return errorResponse(
-        { success: false, message: "Usuário não encontrado" },
-        404,
-        event
-      );
-    }
+    const { user } = resolved;
 
     // Verificar perfis de acesso do usuário
+    const { getDbConnection } = require("../utils/database");
+    const knex = getDbConnection();
     const userProfiles = await knex("user_access_profiles")
       .where({ user_id: user.id })
       .pluck("access_profile_id");
