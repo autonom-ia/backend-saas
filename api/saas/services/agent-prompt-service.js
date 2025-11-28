@@ -1,4 +1,5 @@
 const { getDbConnection } = require("../utils/database");
+const { getProductById } = require("./product-service");
 
 /**
  * Busca todos os prompts ativos e não deletados de um produto
@@ -292,6 +293,38 @@ const reactivatePrompt = async (id) => {
   return reactivatedPrompt;
 };
 
+/**
+ * Busca instruções do tipo de produto relacionadas a um produto
+ * @param {string} productId - ID do produto
+ * @returns {Promise<Array>} Lista de instruções do tipo de produto
+ */
+const getProductTypeInstructionsByProductId = async (productId) => {
+  const knex = getDbConnection();
+  
+  // Buscar o produto para obter o product_type_id
+  const product = await getProductById(productId);
+  
+  // Se o produto não tem product_type_id, retorna array vazio
+  if (!product.product_type_id) {
+    return [];
+  }
+  
+  // Buscar todas as instruções do tipo de produto
+  const instructions = await knex('product_type_instruction')
+    .where('product_type_id', product.product_type_id)
+    .select('id', 'code', 'description', 'instruction', 'created_at', 'updated_at')
+    .orderBy('code', 'asc')
+    .orderBy('created_at', 'asc');
+  
+  // Adicionar flag para indicar que são não editáveis e origem
+  return instructions.map(instruction => ({
+    ...instruction,
+    isEditable: false,
+    source: 'product_type_instruction',
+    product_type_id: product.product_type_id,
+  }));
+};
+
 module.exports = {
   getPromptsByProductId,
   getPromptsHistoryByProductId,
@@ -302,4 +335,5 @@ module.exports = {
   updatePrompt,
   deletePrompt,
   reactivatePrompt,
+  getProductTypeInstructionsByProductId,
 };
