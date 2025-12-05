@@ -36,7 +36,7 @@ function replaceVariables(text, data) {
   return text;
 }
 
-async function buildAgentInstructions(db, product, productParameters) {
+async function buildAgentInstructions(db, product, accountId) {
   if (!product) return '';
   const blocks = [];
 
@@ -55,13 +55,46 @@ async function buildAgentInstructions(db, product, productParameters) {
     }
   }
 
-  if (Array.isArray(productParameters) && productParameters.length) {
-    for (const p of productParameters) {
-      const name = p.name || '';
-      if (!name.endsWith('_instructions')) continue;
-      const val = p.value || '';
-      const title = `### ${name}`;
-      blocks.push(`${title}\n${val}`.trim());
+  const prompts = await db('agent_prompts')
+    .where({ product_id: product.id, is_deleted: false, is_active: true })
+    .orderBy('code', 'asc')
+    .orderBy('created_at', 'desc');
+
+  for (const prompt of prompts) {
+    const title = prompt.title ? `### ${prompt.title}` : '###';
+    const content = prompt.content || '';
+    blocks.push(`${title}\n${content}`.trim());
+  }
+
+  if (accountId) {
+    const integrations = await db('account_integration_api')
+      .where({ account_id: accountId, is_active: true })
+      .orderBy('created_at', 'asc');
+
+    for (const integration of integrations) {
+      const integrationTitle = integration.name ? `### Integração: ${integration.name}` : '### Integração';
+      const integrationInstr = integration.agent_instruction || '';
+
+      const fields = await db('account_integration_api_field')
+        .where('account_integration_api_id', integration.id)
+        .orderBy('sort_order', 'asc');
+
+      const fieldLines = fields.map((field) => {
+        const key = field.api_field_key || '';
+        const label = field.user_label || '';
+        const desc = field.user_description || '';
+        const auto = field.auto_fill_document_type || '';
+        const parts = [];
+        if (key) parts.push(key);
+        if (label) parts.push(`label: ${label}`);
+        if (desc) parts.push(`descrição: ${desc}`);
+        if (auto) parts.push(`auto-preenchido por: ${auto}`);
+        return `- ${parts.join(' | ')}`.trim();
+      });
+
+      const fieldsBlock = fieldLines.length ? ['Campos:', ...fieldLines].join('\n') : '';
+      const blockParts = [integrationTitle, integrationInstr, fieldsBlock].filter(Boolean);
+      blocks.push(blockParts.join('\n\n').trim());
     }
   }
 
@@ -203,8 +236,13 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
     };
     const mergedParams = mergeParamsPreferFilled(accountParams, productParams);
 
+    const integrations = await db('account_integration_api')
+      .where({ account_id: accountId })
+      .orderBy('created_at', 'asc')
+      .select('id', 'slug', 'agent_instruction');
+
     const product = products && products[0] ? products[0] : null;
-    const rawAgentInstructions = await buildAgentInstructions(db, product, productParameters);
+    const rawAgentInstructions = await buildAgentInstructions(db, product, accountId);
 
     const productAccountSettings = {
       product_account_settings: {
@@ -218,7 +256,17 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
       try { knowledgeBase = JSON.parse(knowledgeBase); } catch (_) { knowledgeBase = {}; }
     }
     const data = knowledgeBase || {};
-    const outputText = replaceVariables(rawAgentInstructions || '', data);
+
+    const hasParamAgentInstructions = mergedParams &&
+      mergedParams.agent_instructions !== undefined &&
+      mergedParams.agent_instructions !== null &&
+      String(mergedParams.agent_instructions).trim() !== '';
+
+    const baseInstructionsText = hasParamAgentInstructions
+      ? String(mergedParams.agent_instructions)
+      : (rawAgentInstructions || '');
+
+    const outputText = replaceVariables(baseInstructionsText, data);
 
     const filteredMergedParams = Object.fromEntries(
       Object.entries(mergedParams || {}).filter(([k]) => !k.endsWith('_instructions'))
@@ -230,6 +278,7 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
       accounts,
       products,
       agent_instructions: outputText,
+      account_integrations: integrations,
       ...filteredMergedParams
     };
 
