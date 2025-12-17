@@ -70,6 +70,8 @@ provider:
     N8N_WEBHOOK_URL: ${ssm:/autonomia/${self:provider.stage}/n8n/webhook-url, 'https://auto.autonomia.site/workflow/AEuLu99AOhpofmhJ'}
     KNOWLEDGE_BUCKET: ${ssm:/autonomia/${self:provider.stage}/knowledge/bucket, 'autonomia-knowledge-docs'}
     KNOWLEDGE_PUBLIC_BASE: ${ssm:/autonomia/${self:provider.stage}/knowledge/public-base, 'https://autonomia-knowledge-docs.s3.amazonaws.com'}
+    EVS_PRODUCT_ID: ${ssm:/autonomia/saas/EVS_PRODUCT_ID, ''}
+    EUVIAJO_CLIENT_API_TOKEN: ${ssm:/autonomia/saas/EUVIAJO_CLIENT_API_TOKEN, ''}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -538,6 +540,16 @@ functions:
           method: post
           cors: true
           authorizer: ${self:custom.authorizer}
+
+  evsPartialRegister:
+    handler: handlers/evs-partial-register.handler
+    events:
+      - http:
+          path: Autonomia/Saas/EVS/PartialRegister
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+    vpc: null
 
   listProductParametersStandard:
     handler: handlers/list-product-parameters-standard.handler

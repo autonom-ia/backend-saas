@@ -6,6 +6,7 @@ async function listCampaignsByProduct(productId) {
   return knex('campaign as c')
     .join('account as a', 'a.id', 'c.account_id')
     .leftJoin('template_message as t', 't.id', 'c.template_message_id')
+    .leftJoin('contact as ct', 'ct.campaign_id', 'c.id')
     .select(
       'c.id',
       'c.name',
@@ -14,9 +15,20 @@ async function listCampaignsByProduct(productId) {
       'c.account_id',
       'c.created_at',
       knex.raw('a.name as account_name'),
-      knex.raw('t.name as template_name')
+      knex.raw('t.name as template_name'),
+      knex.raw('COUNT(ct.id) as contact_count')
     )
     .where('a.product_id', productId)
+    .groupBy(
+      'c.id',
+      'c.name',
+      'c.description',
+      'c.template_message_id',
+      'c.account_id',
+      'c.created_at',
+      'a.name',
+      't.name'
+    )
     .orderBy('c.created_at', 'desc');
 }
 

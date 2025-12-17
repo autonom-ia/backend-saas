@@ -23,7 +23,8 @@ exports.handler = async (event) => {
       accountPhone,
       productId,
       parameters = {},
-      user_id 
+      user_id,
+      document,
     } = body;
 
     // Validações
@@ -46,11 +47,30 @@ exports.handler = async (event) => {
       social_name: accountName,
       email: accountEmail,
       phone: accountPhone,
-      product_id: productId
+      product_id: productId,
+      document,
     });
 
     const accountId = created.id;
     const knex = getDbConnection();
+
+    // Criar parâmetro 'document' na account_parameter com o mesmo valor da conta
+    try {
+      if (document && document.toString().trim()) {
+        await knex('account_parameter').insert({
+          name: 'document',
+          value: document.toString(),
+          account_id: accountId,
+          short_description: 'Documento',
+          help_text: 'Documento (CPF/CNPJ) associado à conta.',
+          default_value: null,
+        });
+        console.log('[create-account-onboarding] Parâmetro document criado com sucesso');
+      }
+    } catch (docErr) {
+      console.error('[create-account-onboarding] Falha ao criar parâmetro document:', docErr?.message || docErr);
+      // Não interrompe a criação da conta
+    }
 
     // Criar inbox automaticamente
     try {
@@ -102,11 +122,11 @@ exports.handler = async (event) => {
       // Não interrompe a criação da conta
     }
 
-    // Buscar outros parâmetros standard e criar para a conta (exceto metadata)
+    // Buscar outros parâmetros standard e criar para a conta (exceto metadata, knowledgeBase e document)
     try {
       const standardParams = await knex('account_parameters_standard')
         .select('name', 'short_description', 'help_text', 'default_value')
-        .whereNot('name', 'metadata') // Exclui metadata pois já foi tratado acima
+        .whereNotIn('name', ['metadata', 'knowledgeBase', 'document']) // Exclui metadata (já tratada), knowledgeBase e document (já criado acima)
         .orderBy('name', 'asc');
       
       if (standardParams.length > 0) {

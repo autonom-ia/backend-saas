@@ -62,11 +62,11 @@ provider:
     DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
     # Banco de dados clients
     # Usar sempre /autonomia/${stage}/clients/db/* pois ambos os databases existem em staging e prod
-    CLIENTS_DB_HOST: ${ssm:/autonomia/${self:provider.stage}/clients/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
-    CLIENTS_DB_PORT: ${ssm:/autonomia/${self:provider.stage}/clients/db/port, '5432'}
-    CLIENTS_DB_NAME: ${ssm:/autonomia/${self:provider.stage}/clients/db/name, 'autonomia_clients'}
-    CLIENTS_DB_USER: ${ssm:/autonomia/${self:provider.stage}/clients/db/user, 'autonomia_clients_admin'}
-    CLIENTS_DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/clients/db/password, ''}
+    CLIENTS_DB_HOST: ${ssm:/autonomia/clients/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    CLIENTS_DB_PORT: ${ssm:/autonomia/clients/db/port, '5432'}
+    CLIENTS_DB_NAME: ${ssm:/autonomia/clients/db/name, 'autonomia_clients'}
+    CLIENTS_DB_USER: ${ssm:/autonomia/clients/db/user, 'autonomia_clients_admin'}
+    CLIENTS_DB_PASSWORD: ${ssm:/autonomia/clients/db/password, ''}
     # Redis
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, 'autonomia-redis.lfxcgb.ng.0001.use1.cache.amazonaws.com'}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}

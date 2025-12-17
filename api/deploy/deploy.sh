@@ -511,7 +511,6 @@ process_js_files() {
   for file in $(find $dir -maxdepth 1 -name "*.js"); do
     filename=$(basename $file)
     echo -e "${GREEN}Minificando: ${filename}${NC}"
-    
     terser $file \
       --compress passes=2,drop_console=false \
       --mangle toplevel=true,reserved=['handler','exports','require','module'] \
