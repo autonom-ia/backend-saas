@@ -250,6 +250,8 @@ functions:
   sendCampaignMessages:
     handler: handlers/send-campaign-messages.handler
     timeout: 60
+    # Override provider VPC: this function will run without VPC
+    vpc: null
     events:
       - http:
           path: Autonomia/Leadshot/Campaigns/{campaignId}/send

@@ -37,23 +37,39 @@ exports.handler = withCors(async (event, context) => {
       return errorResponse({ success: false, message: 'Usuário não encontrado' }, 404, event);
     }
 
-    // Verificar se o usuário tem acesso à campanha através das contas
-    const userAccounts = await knex('user_accounts')
+    // Calcular flag de admin consultando perfis de acesso do usuário
+    const ADMIN_PROFILE_ID = 'b36dd047-1634-4a89-97f3-127688104dd0';
+    const userProfiles = await knex('user_access_profiles')
       .where({ user_id: user.id })
-      .pluck('account_id');
+      .pluck('access_profile_id');
+    const isAdmin = Array.isArray(userProfiles) && userProfiles.includes(ADMIN_PROFILE_ID);
 
-    if (userAccounts.length === 0) {
-      return errorResponse({ 
-        success: false, 
-        message: 'Usuário não possui acesso a nenhuma conta' 
-      }, 403, event);
+    let campaign;
+
+    if (isAdmin) {
+      // Admin pode acessar qualquer campanha
+      campaign = await knex('campaign')
+        .where({ id: campaignId })
+        .first();
+    } else {
+      // Verificar se o usuário tem acesso à campanha através das contas
+      const userAccounts = await knex('user_accounts')
+        .where({ user_id: user.id })
+        .pluck('account_id');
+
+      if (userAccounts.length === 0) {
+        return errorResponse({ 
+          success: false, 
+          message: 'Usuário não possui acesso a nenhuma conta' 
+        }, 403, event);
+      }
+
+      // Verificar se a campanha pertence a uma das contas do usuário
+      campaign = await knex('campaign')
+        .where({ id: campaignId })
+        .whereIn('account_id', userAccounts)
+        .first();
     }
-
-    // Verificar se a campanha pertence a uma das contas do usuário
-    const campaign = await knex('campaign')
-      .where({ id: campaignId })
-      .whereIn('account_id', userAccounts)
-      .first();
 
     if (!campaign) {
       return errorResponse({ 

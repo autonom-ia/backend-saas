@@ -332,6 +332,8 @@ const sendCampaignMessages = async (campaignId, filters = {}) => {
   // Preparar payload para n8n
   const payload = {
     action: 'send',
+    // ID da campanha em nível de raiz para facilitar o consumo no n8n
+    campaign_id: campaign.id,
     campaign: {
       id: campaign.id,
       name: campaign.name,
@@ -349,7 +351,7 @@ const sendCampaignMessages = async (campaignId, filters = {}) => {
   };
 
   // Enviar para n8n
-  const n8nUrl = process.env.N8N_WEBHOOK_URL || 'https://auto.autonomia.site/workflow/AEuLu99AOhpofmhJ';
+  const n8nUrl = process.env.N8N_WEBHOOK_URL || 'https://auto.autonomia.site/webhook/disparo-campanha';
   
   try {
     await axios.post(n8nUrl, payload, {
