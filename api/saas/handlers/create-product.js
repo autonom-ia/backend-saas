@@ -23,7 +23,7 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    const { name, description, product_type_id, domain } = requestBody;
+    const { name, description, product_type_id, domain, conversation_funnel_id } = requestBody;
 
     // Validação dos campos obrigatórios
     if (!name) {
@@ -55,6 +55,7 @@ exports.handler = withCors(async (event, context) => {
       description,
       product_type_id,
       domain,
+      conversation_funnel_id,
     });
 
     // Criar parâmetros para o novo produto baseado nos padrões (product_parameters_standard)

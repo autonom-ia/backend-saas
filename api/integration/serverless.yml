@@ -125,6 +125,14 @@ functions:
           method: post
           cors: true
 
+  coparOnboardingFull:
+    handler: handlers/copar-onboarding-full.handler
+    events:
+      - http:
+          path: api/v1/integration/copar/onboarding/full
+          method: post
+          cors: true
+
   coparOnboardingPayment:
     handler: handlers/copar-onboarding-payment.handler
     events:

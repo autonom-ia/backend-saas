@@ -34,7 +34,7 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    const { name, description, product_type_id } = requestBody;
+    const { name, description, product_type_id, conversation_funnel_id } = requestBody;
 
     // Validar se pelo menos um campo foi fornecido para atualização
     if (
@@ -56,6 +56,7 @@ exports.handler = withCors(async (event, context) => {
       name,
       description,
       product_type_id,
+      conversation_funnel_id,
     });
 
     return success(

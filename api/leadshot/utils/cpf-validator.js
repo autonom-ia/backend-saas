@@ -14,9 +14,12 @@ const validateCpf = (cpf) => {
     }
 
     // Remove caracteres não numéricos
-    const cleanCpf = cpf.replace(/\D/g, '');
+    const digitsOnly = cpf.replace(/\D/g, '');
 
-    // Verifica se tem 11 dígitos
+    // Preenche com zeros à esquerda até 11 dígitos (estilo LPAD)
+    const cleanCpf = digitsOnly.padStart(11, '0');
+
+    // Verifica se tem exatamente 11 dígitos após o padding
     if (cleanCpf.length !== 11) {
       return {
         isValid: false,

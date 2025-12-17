@@ -271,6 +271,15 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
     const filteredMergedParams = Object.fromEntries(
       Object.entries(mergedParams || {}).filter(([k]) => !k.endsWith('_instructions'))
     );
+
+    // Extrair campos da knowledgeBase (quando em formato objeto) para a raiz da resposta,
+    // sem sobrescrever parâmetros já existentes em filteredMergedParams.
+    const knowledgeBaseFields =
+      knowledgeBase && typeof knowledgeBase === 'object' && !Array.isArray(knowledgeBase)
+        ? Object.fromEntries(
+            Object.entries(knowledgeBase).filter(([key]) => !(key in filteredMergedParams))
+          )
+        : {};
     
     // Estruturar resposta com os parâmetros diretamente na raiz
     const result = {
@@ -279,7 +288,8 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
       products,
       agent_instructions: outputText,
       account_integrations: integrations,
-      ...filteredMergedParams
+      ...filteredMergedParams,
+      ...knowledgeBaseFields
     };
 
     // Armazenar no cache apenas se houver sessões de usuário

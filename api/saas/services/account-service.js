@@ -47,8 +47,38 @@ const getAccountById = async (id) => {
  */
 const createAccount = async ({ social_name, name, email, phone, product_id, document, instance, conversation_funnel_id, domain }) => {
   const knex = getDbConnection();
+
+  let finalConversationFunnelId = conversation_funnel_id;
+
+  // Normalizar telefone: manter apenas dígitos e garantir prefixo 55
+  let normalizedPhone = phone;
+  try {
+    const digits = (phone || '').toString().replace(/\D/g, '');
+    if (digits) {
+      normalizedPhone = digits.startsWith('55') ? digits : `55${digits}`;
+    } else {
+      normalizedPhone = phone;
+    }
+  } catch (e) {
+    console.error('[createAccount] Falha ao normalizar telefone, usando valor original', { phone, error: e });
+    normalizedPhone = phone;
+  }
+
+  // Se não foi enviado conversation_funnel_id explicitamente, herdar do produto (se existir)
+  if (!finalConversationFunnelId && product_id) {
+    try {
+      const product = await knex('product').where({ id: product_id }).first();
+      if (product && product.conversation_funnel_id) {
+        finalConversationFunnelId = product.conversation_funnel_id;
+      }
+    } catch (e) {
+      // Logamos mas não bloqueamos a criação da conta
+      console.error('[createAccount] Erro ao buscar conversation_funnel_id do produto', { product_id, error: e });
+    }
+  }
+
   const [newAccount] = await knex('account')
-    .insert({ social_name, name, email, phone, product_id, document, instance, conversation_funnel_id, domain })
+    .insert({ social_name, name, email, phone: normalizedPhone, product_id, document, instance, conversation_funnel_id: finalConversationFunnelId, domain })
     .returning('*');
   return newAccount;
 };
