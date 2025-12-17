@@ -117,15 +117,18 @@ const uploadContactsHandler = withCors(async (event, context) => {
             raw: row,
             validation: {
               isValid: validation.isValid,
+              canSave: validation.canSave,
               errors: validation.errors,
               normalizedPhone: validation.normalizedPhone
             }
           });
         }
         
-        if (validation.isValid) {
+        if (validation.canSave) {
           validatedContacts.push(validation);
-        } else {
+        }
+
+        if (!validation.isValid && validation.errors && validation.errors.length > 0) {
           validationErrors.push({
             lineNumber,
             errors: validation.errors

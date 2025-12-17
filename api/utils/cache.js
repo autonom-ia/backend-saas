@@ -17,28 +17,28 @@ const getRedisClient = () => {
   const port = process.env.REDIS_PORT || 6379;
   
   // Só inicializa o Redis se houver um host configurado
-  if (host) {
-    try {
-      redisClient = new Redis({
-        host,
-        port: parseInt(port, 10),
-        connectTimeout: 5000,
-        maxRetriesPerRequest: 3,
-        enableReadyCheck: true
-      });
-      
-      redisClient.on('error', (err) => {
-        console.error('Erro na conexão com Redis:', err);
-      });
-      
-      console.log(`Cliente Redis inicializado para ${host}:${port}`);
-      return redisClient;
-    } catch (err) {
-      console.error('Falha ao inicializar Redis:', err);
-      return null;
-    }
-  } else {
+  if (!host) {
     console.log('Redis não configurado, cache desabilitado');
+    return null;
+  }
+
+  try {
+    redisClient = new Redis({
+      host,
+      port: parseInt(port, 10),
+      connectTimeout: 5000,
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+    });
+
+    redisClient.on('error', (err) => {
+      console.error('Erro na conexão com Redis:', err);
+    });
+
+    console.log(`Cliente Redis inicializado para ${host}:${port}`);
+    return redisClient;
+  } catch (err) {
+    console.error('Falha ao inicializar Redis:', err);
     return null;
   }
 };

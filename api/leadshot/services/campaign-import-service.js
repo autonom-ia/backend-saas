@@ -101,19 +101,17 @@ const validateAndNormalizeContact = (row, mapping, lineNumber) => {
   } else {
     const phoneValidation = normalizePhone(phoneValue);
     console.log(`[VALIDATE] Linha ${lineNumber} - Validação telefone:`, phoneValidation);
+    // Sempre manter o telefone informado no contato, independente do formato
+    contact.phone = phoneValue;
     if (!phoneValidation.isValid) {
       errors.push(`Telefone inválido: ${phoneValidation.error}`);
-    } else {
-      contact.phone = phoneValidation.normalizedPhone;
     }
   }
 
-  // Validar CPF
+  // Validar CPF (opcional: só se informado)
   const cpfValue = row[mapping.cpf]?.toString().trim();
   console.log(`[VALIDATE] Linha ${lineNumber} - CPF:`, { column: mapping.cpf, rawValue: row[mapping.cpf], trimmed: cpfValue });
-  if (!cpfValue) {
-    errors.push(`CPF é obrigatório`);
-  } else {
+  if (cpfValue) {
     const cpfValidation = validateCpf(cpfValue);
     console.log(`[VALIDATE] Linha ${lineNumber} - Validação CPF:`, cpfValidation);
     if (!cpfValidation.isValid) {
@@ -133,14 +131,18 @@ const validateAndNormalizeContact = (row, mapping, lineNumber) => {
     }
   });
 
+  const canSave = !!(contact.name && contact.phone);
+
   console.log(`[VALIDATE] Linha ${lineNumber} - Resultado:`, {
     isValid: errors.length === 0,
+    canSave,
     errors,
     contact
   });
 
   return {
     isValid: errors.length === 0,
+    canSave,
     contact,
     errors,
     lineNumber,
@@ -182,6 +184,9 @@ const saveContacts = async (contacts, campaignId, accountId) => {
         continue;
       }
 
+      // Definir status externo com base em erros de validação
+      const hasValidationErrors = Array.isArray(contactData.errors) && contactData.errors.length > 0;
+
       // Inserir contato
       await knex('contact').insert({
         name: contactData.contact.name,
@@ -189,7 +194,7 @@ const saveContacts = async (contacts, campaignId, accountId) => {
         contact_data: JSON.stringify(contactData.contact.contact_data),
         campaign_id: campaignId,
         account_id: accountId,
-        external_status: 'pending'
+        external_status: hasValidationErrors ? 'validation_failed' : 'pending'
       });
 
       results.totalSaved++;
@@ -327,6 +332,8 @@ const sendCampaignMessages = async (campaignId, filters = {}) => {
   // Preparar payload para n8n
   const payload = {
     action: 'send',
+    // ID da campanha em nível de raiz para facilitar o consumo no n8n
+    campaign_id: campaign.id,
     campaign: {
       id: campaign.id,
       name: campaign.name,
@@ -344,7 +351,7 @@ const sendCampaignMessages = async (campaignId, filters = {}) => {
   };
 
   // Enviar para n8n
-  const n8nUrl = process.env.N8N_WEBHOOK_URL || 'https://auto.autonomia.site/workflow/AEuLu99AOhpofmhJ';
+  const n8nUrl = process.env.N8N_WEBHOOK_URL || 'https://auto.autonomia.site/webhook/disparo-campanha';
   
   try {
     await axios.post(n8nUrl, payload, {
