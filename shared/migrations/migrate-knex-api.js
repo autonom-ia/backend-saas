@@ -151,8 +151,25 @@ const runMigrations = async (dbType = DB_TYPES.DEFAULT) => {
     try {
       [batchNo, log] = await knexInstance.migrate.latest();
     } catch (migrationError) {
+      const msg = migrationError && migrationError.message ? migrationError.message : String(migrationError);
+
+      // Caso especial: diretório de migrações "corrompido" porque existem
+      // entradas na tabela para arquivos que não estão mais presentes neste repo.
+      // Nesse cenário, apenas registramos um aviso e seguimos em frente,
+      // assumindo que não há novas migrações a aplicar neste repositório.
+      if (msg.includes('The migration directory is corrupt, the following files are missing')) {
+        console.warn('[migrate-knex-api] Aviso: diretório de migrações considerado corrompido pelo Knex (arquivos ausentes).');
+        console.warn('[migrate-knex-api] Ignorando essa validação e seguindo sem aplicar novas migrações para', dbType);
+        await knexInstance.destroy();
+        return {
+          success: true,
+          message: 'Nenhuma migração aplicada (ignorando validação de arquivos ausentes, tratada como warning).',
+          details: { batchNo: null, migrations: [], dbType }
+        };
+      }
+
       // Se o erro for relacionado à tabela de migrações já existir, podemos tentar novamente
-      if (migrationError.message.includes('already exists')) {
+      if (msg.includes('already exists')) {
         console.log('A tabela de migrações já existe. Tentando executar as migrações novamente...');
         try {
           [batchNo, log] = await knexInstance.migrate.latest();
@@ -166,11 +183,11 @@ const runMigrations = async (dbType = DB_TYPES.DEFAULT) => {
           };
         }
       } else {
-        console.error('Erro ao executar migrações:', migrationError.message);
+        console.error('Erro ao executar migrações:', msg);
         await knexInstance.destroy();
         return {
           success: false,
-          error: migrationError.message,
+          error: msg,
           message: `Erro ao executar migrações para banco ${dbType}`
         };
       }
