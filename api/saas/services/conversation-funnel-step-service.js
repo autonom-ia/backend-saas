@@ -20,7 +20,15 @@ const getStepById = async (id) => {
 };
 
 // Cria step
-const createStep = async ({ name, description, conversation_funnel_id, agent_instruction, order }) => {
+const createStep = async ({
+  name,
+  description,
+  conversation_funnel_id,
+  agent_instruction,
+  order,
+  kanban_code,
+  assign_to_team,
+}) => {
   const knex = getDbConnection();
   if (!name || !description || !conversation_funnel_id) {
     throw new Error('Campos obrigatórios: name, description, conversation_funnel_id');
@@ -28,6 +36,8 @@ const createStep = async ({ name, description, conversation_funnel_id, agent_ins
   const insertData = { name, description, conversation_funnel_id };
   if (agent_instruction !== undefined) insertData.agent_instruction = agent_instruction;
   if (order !== undefined) insertData.order = order;
+  if (kanban_code !== undefined) insertData.kanban_code = kanban_code;
+  if (assign_to_team !== undefined) insertData.assign_to_team = assign_to_team;
   const [created] = await knex('conversation_funnel_step')
     .insert(insertData)
     .returning('*');
@@ -35,7 +45,10 @@ const createStep = async ({ name, description, conversation_funnel_id, agent_ins
 };
 
 // Atualiza step
-const updateStep = async (id, { name, description, conversation_funnel_id, agent_instruction, order }) => {
+const updateStep = async (
+  id,
+  { name, description, conversation_funnel_id, agent_instruction, order, kanban_code, assign_to_team }
+) => {
   const knex = getDbConnection();
   await getStepById(id);
   const updateData = {};
@@ -44,6 +57,8 @@ const updateStep = async (id, { name, description, conversation_funnel_id, agent
   if (conversation_funnel_id !== undefined) updateData.conversation_funnel_id = conversation_funnel_id;
   if (agent_instruction !== undefined) updateData.agent_instruction = agent_instruction;
   if (order !== undefined) updateData.order = order;
+  if (kanban_code !== undefined) updateData.kanban_code = kanban_code;
+  if (assign_to_team !== undefined) updateData.assign_to_team = assign_to_team;
   const [updated] = await knex('conversation_funnel_step')
     .where({ id })
     .update(updateData)

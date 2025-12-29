@@ -19,12 +19,36 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { name, description, conversation_funnel_id, agent_instruction, order } = body;
-    if (name === undefined && description === undefined && conversation_funnel_id === undefined && agent_instruction === undefined && order === undefined) {
+    const {
+      name,
+      description,
+      conversation_funnel_id,
+      agent_instruction,
+      order,
+      kanban_code,
+      assign_to_team,
+    } = body;
+    if (
+      name === undefined &&
+      description === undefined &&
+      conversation_funnel_id === undefined &&
+      agent_instruction === undefined &&
+      order === undefined &&
+      kanban_code === undefined &&
+      assign_to_team === undefined
+    ) {
       return errorResponse({ success: false, message: 'Forneça ao menos um campo para atualizar' }, 400);
     }
 
-    const updated = await updateStep(stepId, { name, description, conversation_funnel_id, agent_instruction, order });
+    const updated = await updateStep(stepId, {
+      name,
+      description,
+      conversation_funnel_id,
+      agent_instruction,
+      order,
+      kanban_code,
+      assign_to_team,
+    });
     return success({ success: true, message: 'Step atualizado com sucesso', data: updated }, 200);
   } catch (error) {
     if (error?.message === 'Etapa de funil não encontrada') {
