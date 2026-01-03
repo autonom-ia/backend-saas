@@ -176,6 +176,16 @@ functions:
           path: Autonomia/Settings/GetContactByExternalCode
           method: post
           cors: true
+
+  createUserSessionAgentMessage:
+    handler: handlers/create-user-session-agent-message.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/UserSessionAgentMessages
+          method: post
+          cors: true
   
 package:
   individually: true
