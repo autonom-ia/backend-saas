@@ -866,3 +866,18 @@ functions:
           method: post
           cors: true
           # Note: No authorizer for webhook endpoint
+
+  getUserSessionAgentMessageStats:
+    handler: handlers/get-user-session-agent-message-stats.handler
+    events:
+      - http:
+          path: Autonomia/Saas/UserSessionAgentMessages/Stats
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+                startDate: true
+                endDate: true
+          authorizer: ${self:custom.authorizer}
