@@ -206,6 +206,9 @@ const buildCoparCurlCommand = (payload) => {
     parts.push(`-F "${name}=${escapeValue(value)}"`);
   };
 
+  const tipoUpper = String(payload?.tipo || '').toUpperCase();
+  const isPJ = tipoUpper === 'PJ';
+
   pushField('tipo', payload.tipo);
   pushField('email', payload.email);
   pushField('telefone', formattedTelefone);
@@ -215,12 +218,15 @@ const buildCoparCurlCommand = (payload) => {
   pushField('nacionalidade', payload.nacionalidade);
   pushField('orgao_emissor', payload.orgao_emissor);
   pushField('data_nascimento', formatDateToCopar(payload.data_nascimento));
-  pushField('razao_social', payload.razao_social);
-  pushField('nome_fantasia', payload.nome_fantasia);
-  pushField('cnpj', payload.cnpj);
-  pushField('nome_responsavel', payload.nome_responsavel);
-  pushField('cpf_responsavel', payload.cpf_responsavel);
-  pushField('data_nascimento_responsavel', formatDateToCopar(payload.data_nascimento_responsavel));
+
+  if (isPJ) {
+    pushField('razao_social', payload.razao_social);
+    pushField('nome_fantasia', payload.nome_fantasia);
+    pushField('cnpj', payload.cnpj);
+    pushField('nome_responsavel', payload.nome_responsavel);
+    pushField('cpf_responsavel', payload.cpf_responsavel);
+    pushField('data_nascimento_responsavel', formatDateToCopar(payload.data_nascimento_responsavel));
+  }
   pushField('pdf_conta_luz', payload.pdf_conta_luz);
   pushField('consumo_medio', payload.consumo_medio);
   pushField('valor_fatura', payload.valor_fatura);
@@ -303,6 +309,8 @@ const buildCoparFormData = async (payload) => {
   const formData = new FormData();
   const stepValue = payload && payload.step != null ? String(payload.step) : '';
   const formattedTelefone = formatPhoneToCopar(payload.telefone);
+  const tipoUpper = String(payload?.tipo || '').toUpperCase();
+  const isPJ = tipoUpper === 'PJ';
 
   if (stepValue === '0') {
     appendField(formData, 'email', payload.email);
@@ -554,12 +562,15 @@ const buildCoparFormData = async (payload) => {
   appendField(formData, 'nacionalidade', payload.nacionalidade);
   appendField(formData, 'orgao_emissor', payload.orgao_emissor);
   appendField(formData, 'data_nascimento', payload.data_nascimento);
-  appendField(formData, 'razao_social', payload.razao_social);
-  appendField(formData, 'nome_fantasia', payload.nome_fantasia);
-  appendField(formData, 'cnpj', payload.cnpj);
-  appendField(formData, 'nome_responsavel', payload.nome_responsavel);
-  appendField(formData, 'cpf_responsavel', payload.cpf_responsavel);
-  appendField(formData, 'data_nascimento_responsavel', payload.data_nascimento_responsavel);
+
+  if (isPJ) {
+    appendField(formData, 'razao_social', payload.razao_social);
+    appendField(formData, 'nome_fantasia', payload.nome_fantasia);
+    appendField(formData, 'cnpj', payload.cnpj);
+    appendField(formData, 'nome_responsavel', payload.nome_responsavel);
+    appendField(formData, 'cpf_responsavel', payload.cpf_responsavel);
+    appendField(formData, 'data_nascimento_responsavel', payload.data_nascimento_responsavel);
+  }
 
   if (payload.pdf_conta_luz) {
     try {
