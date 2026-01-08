@@ -195,8 +195,11 @@ const buildFormDataForStep = async (payload, step) => {
 
     appendField(formData, 'consumo_medio', payload.consumo_medio);
     appendField(formData, 'valor_fatura', payload.valor_fatura);
-    appendField(formData, 'nome_razao_social_titular', payload.nome_razao_social_titular);
-    appendField(formData, 'cpf_cnpj_titular', payload.cpf_cnpj_titular);
+
+    if (isPJ) {
+      appendField(formData, 'nome_razao_social_titular', payload.nome_razao_social_titular);
+      appendField(formData, 'cpf_cnpj_titular', payload.cpf_cnpj_titular);
+    }
     appendField(formData, 'cep_instalacao', payload.cep_instalacao);
     appendField(formData, 'logradouro_instalacao', payload.logradouro_instalacao);
     appendField(formData, 'numero_instalacao', payload.numero_instalacao);

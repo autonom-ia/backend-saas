@@ -227,11 +227,11 @@ const buildCoparCurlCommand = (payload) => {
     pushField('cpf_responsavel', payload.cpf_responsavel);
     pushField('data_nascimento_responsavel', formatDateToCopar(payload.data_nascimento_responsavel));
   }
+  pushField('nome_razao_social_titular', payload.nome_razao_social_titular);
+  pushField('cpf_cnpj_titular', payload.cpf_cnpj_titular);
   pushField('pdf_conta_luz', payload.pdf_conta_luz);
   pushField('consumo_medio', payload.consumo_medio);
   pushField('valor_fatura', payload.valor_fatura);
-  pushField('nome_razao_social_titular', payload.nome_razao_social_titular);
-  pushField('cpf_cnpj_titular', payload.cpf_cnpj_titular);
   pushField('cep_instalacao', payload.cep_instalacao);
   pushField('logradouro_instalacao', payload.logradouro_instalacao);
   pushField('numero_instalacao', payload.numero_instalacao);
@@ -355,6 +355,7 @@ const buildCoparFormData = async (payload) => {
 
     appendField(formData, 'consumo_medio', payload.consumo_medio);
     appendField(formData, 'valor_fatura', payload.valor_fatura);
+
     appendField(formData, 'nome_razao_social_titular', payload.nome_razao_social_titular);
     appendField(formData, 'cpf_cnpj_titular', payload.cpf_cnpj_titular);
     appendField(formData, 'cep_instalacao', payload.cep_instalacao);
@@ -461,12 +462,14 @@ const buildCoparFormData = async (payload) => {
     appendField(formData, 'nacionalidade', payload.nacionalidade);
     appendField(formData, 'orgao_emissor', payload.orgao_emissor);
     appendField(formData, 'data_nascimento', formatDateToCopar(payload.data_nascimento));
-    appendField(formData, 'razao_social', payload.razao_social);
-    appendField(formData, 'nome_fantasia', payload.nome_fantasia);
-    appendField(formData, 'cnpj', payload.cnpj);
-    appendField(formData, 'nome_responsavel', payload.nome_responsavel);
-    appendField(formData, 'cpf_responsavel', payload.cpf_responsavel);
-    appendField(formData, 'data_nascimento_responsavel', formatDateToCopar(payload.data_nascimento_responsavel));
+    if (isPJ) {
+      appendField(formData, 'razao_social', payload.razao_social);
+      appendField(formData, 'nome_fantasia', payload.nome_fantasia);
+      appendField(formData, 'cnpj', payload.cnpj);
+      appendField(formData, 'nome_responsavel', payload.nome_responsavel);
+      appendField(formData, 'cpf_responsavel', payload.cpf_responsavel);
+      appendField(formData, 'data_nascimento_responsavel', payload.data_nascimento_responsavel);
+    }
 
     appendField(formData, 'metodo_pagamento', payload.metodo_pagamento);
     appendField(formData, 'vale_bonus', payload.vale_bonus);
@@ -592,6 +595,7 @@ const buildCoparFormData = async (payload) => {
 
   appendField(formData, 'consumo_medio', payload.consumo_medio);
   appendField(formData, 'valor_fatura', payload.valor_fatura);
+
   appendField(formData, 'nome_razao_social_titular', payload.nome_razao_social_titular);
   appendField(formData, 'cpf_cnpj_titular', payload.cpf_cnpj_titular);
   appendField(formData, 'cep_instalacao', payload.cep_instalacao);
