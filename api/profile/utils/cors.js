@@ -44,15 +44,17 @@ function isAllowedAutonomiaOrigin(origin) {
 function isAllowedOrigin(origin) {
   if (!origin) return false;
   
-  // Em staging, aceitar localhost e domínios da Vercel
-  const isStaging = process.env.NODE_ENV === 'staging';
-  if (isStaging) {
-    if (isLocalhost(origin)) return true;
-    if (isVercelOrigin(origin)) return true;
-  }
+  // Sempre aceitar localhost em qualquer ambiente (desenvolvimento)
+  if (isLocalhost(origin)) return true;
   
   // Verificar origens permitidas específicas
   if (allowedLocalOrigins.has(origin)) return true;
+  
+  // Em staging/production, aceitar domínios da Vercel
+  const isStaging = process.env.NODE_ENV === 'staging' || process.env.NODE_ENV === 'development';
+  if (isStaging) {
+    if (isVercelOrigin(origin)) return true;
+  }
   
   // Verificar origens autonomia.site
   return isAllowedAutonomiaOrigin(origin);
@@ -65,9 +67,27 @@ function buildCorsHeaders(origin) {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'Vary': 'Origin',
   };
+  
+  // Se não há origin, permitir qualquer origem em desenvolvimento
+  if (!origin) {
+    // Em desenvolvimento/staging, permitir qualquer origem
+    const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'staging' || !process.env.NODE_ENV;
+    if (isDev) {
+      return { ...base, 'Access-Control-Allow-Origin': '*' };
+    }
+    return { ...base, 'Access-Control-Allow-Origin': 'null' };
+  }
+  
   if (isAllowedOrigin(origin)) {
     return { ...base, 'Access-Control-Allow-Origin': origin };
   }
+  
+  // Em desenvolvimento, permitir qualquer origem se não estiver na lista
+  const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'staging' || !process.env.NODE_ENV;
+  if (isDev) {
+    return { ...base, 'Access-Control-Allow-Origin': '*' };
+  }
+  
   return { ...base, 'Access-Control-Allow-Origin': 'null' };
 }
 

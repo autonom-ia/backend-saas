@@ -117,4 +117,17 @@ functions:
             parameters:
               querystrings:
                 email: true
-          authorizer: ${self:custom.authorizer}
+
+  listAccessProfiles:
+    handler: handlers/list-access-profiles.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Profile/AccessProfiles
+          method: options
+          cors: false
+      - http:
+          path: Autonomia/Profile/AccessProfiles
+          method: get
+          cors: false

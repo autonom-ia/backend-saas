@@ -1,4 +1,4 @@
-const { CognitoIdentityProviderClient, InitiateAuthCommand, NotAuthorizedException } = require("@aws-sdk/client-cognito-identity-provider");
+const { CognitoIdentityProviderClient, InitiateAuthCommand, NotAuthorizedException, UserNotConfirmedException } = require("@aws-sdk/client-cognito-identity-provider");
 const { createResponse, preflight, getOrigin } = require('./cors');
 
 const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION });
@@ -30,6 +30,18 @@ module.exports.handler = async (event) => {
     return createResponse(200, response.AuthenticationResult, getOrigin(event));
   } catch (error) {
     console.error('Erro de autenticação:', error);
+    
+    // Verificar se é erro de email não confirmado
+    if (error instanceof UserNotConfirmedException) {
+      return createResponse(
+        401,
+        { 
+          message: 'Email não confirmado. Verifique sua caixa de entrada e confirme seu email.',
+          errorType: 'email_not_confirmed'
+        },
+        getOrigin(event)
+      );
+    }
     
     // Usando a função createResponse para aplicar os headers CORS corretamente
     return createResponse(

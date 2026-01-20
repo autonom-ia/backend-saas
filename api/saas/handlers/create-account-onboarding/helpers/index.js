@@ -1,0 +1,17 @@
+module.exports = {
+  ParseRequestBodyHelper: require('./parse-request-body.helper').ParseRequestBodyHelper,
+  ValidateOnboardingDataHelper: require('./validate-onboarding-data.helper').ValidateOnboardingDataHelper,
+  CreateDocumentParameterHelper: require('./create-document-parameter.helper').CreateDocumentParameterHelper,
+  CreateInboxIfNeededHelper: require('./create-inbox-if-needed.helper').CreateInboxIfNeededHelper,
+  FormatKnowledgeBaseValueHelper: require('./format-knowledge-base-value.helper').FormatKnowledgeBaseValueHelper,
+  CreateKnowledgeBaseParameterHelper: require('./create-knowledge-base-parameter.helper').CreateKnowledgeBaseParameterHelper,
+  BuildStandardParametersHelper: require('./build-standard-parameters.helper').BuildStandardParametersHelper,
+  CreateStandardParametersHelper: require('./create-standard-parameters.helper').CreateStandardParametersHelper,
+  GetEffectiveUserIdHelper: require('./get-effective-user-id.helper').GetEffectiveUserIdHelper,
+  CheckHasExcludedProfileHelper: require('./check-has-excluded-profile.helper').CheckHasExcludedProfileHelper,
+  FindClientAdminProfileHelper: require('./find-client-admin-profile.helper').FindClientAdminProfileHelper,
+  AssignProfileToUserHelper: require('./assign-profile-to-user.helper').AssignProfileToUserHelper,
+  LinkUserToAccountHelper: require('./link-user-to-account.helper').LinkUserToAccountHelper,
+  UpdateFirstLoginStatusHelper: require('./update-first-login-status.helper').UpdateFirstLoginStatusHelper,
+  RelateUserToAccountHelper: require('./relate-user-to-account.helper').RelateUserToAccountHelper,
+};
