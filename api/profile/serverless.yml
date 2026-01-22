@@ -48,6 +48,95 @@ provider:
   region: us-east-1
   memorySize: 512
   timeout: 30
+  apiGateway:
+    gatewayResponses:
+      UNAUTHORIZED:
+        statusCode: 401
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        responseTemplates:
+          application/json: '{"message":"Unauthorized"}'
+      ACCESS_DENIED:
+        statusCode: 403
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        responseTemplates:
+          application/json: '{"message":"Access Denied"}'
+      BAD_REQUEST_BODY:
+        statusCode: 400
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+      BAD_REQUEST_PARAMETERS:
+        statusCode: 400
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+      EXPIRED_TOKEN:
+        statusCode: 403
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        responseTemplates:
+          application/json: '{"message":"Expired Token"}'
+      INVALID_SIGNATURE:
+        statusCode: 403
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        responseTemplates:
+          application/json: '{"message":"Invalid Signature"}'
+      INTEGRATION_FAILURE:
+        statusCode: 502
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+      INTEGRATION_TIMEOUT:
+        statusCode: 504
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+      MISSING_AUTHENTICATION_TOKEN:
+        statusCode: 403
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        responseTemplates:
+          application/json: '{"message":"Missing Authentication Token"}'
+      DEFAULT_4XX:
+        statusCode: 400
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+      DEFAULT_5XX:
+        statusCode: 500
+        responseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+          gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
   vpc:
     securityGroupIds:
       - 'sg-0e9189ca9e6d0427d'
@@ -117,4 +206,23 @@ functions:
             parameters:
               querystrings:
                 email: true
+          authorizer: ${self:custom.authorizer}
+          
+  updateFirstLogin:
+    handler: handlers/update-first-login.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Profile/Users/{userId}/first-login
+          method: options
+          cors: false
+      - http:
+          path: Autonomia/Profile/Users/{userId}/first-login
+          method: put
+          cors: false
+          request:
+            parameters:
+              paths:
+                userId: true
           authorizer: ${self:custom.authorizer}
