@@ -1,89 +1,65 @@
 const { getDbConnection } = require('../utils/database');
 const { createResponse, preflight, getOrigin } = require('../utils/cors');
 
-module.exports.handler = async (event) => {
+const getUserByEmail = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return preflight(event);
   }
-  console.log('Recebendo requisição teste sem authorizer:', JSON.stringify(event));
-  
-  try {
-    const origin = getOrigin(event);
-    // Extrair o email dos queryStringParameters
-    const { email } = event.queryStringParameters || {};
 
-    console.log('Email recebido:', email);
+  try {
+    const email = event.queryStringParameters?.email;
 
     if (!email) {
-      return createResponse(400, { message: 'Email é obrigatório', debug: true }, origin);
+      return createResponse(400, { message: 'Email é obrigatório.' }, getOrigin(event));
     }
 
-    // Verificar conexão com banco de dados
-    console.log('Tentando conectar ao banco de dados...');
-    try {
-      // Conectar ao banco de dados
-      const knex = getDbConnection();
-      console.log('Conexão com banco de dados estabelecida');
-      
-      // Log da query que será executada
-      console.log(`Executando query para buscar usuário com email: ${email}`);
-      
-      // Buscar o usuário pelo email
-      const user = await knex('users')
-        .where({ email })
-        .select('id', 'name', 'email', 'phone', 'is_first_login', 'created_at')
-        .first();
+    const knex = getDbConnection();
 
-      console.log('Resultado da query:', user ? 'Usuário encontrado' : 'Usuário não encontrado');
+    const user = await knex('users')
+      .where({ email })
+      .first();
 
-      if (!user) {
-        return createResponse(404, { message: 'Usuário não encontrado', email }, origin);
-      }
+    if (!user) {
+      return createResponse(404, { message: 'Usuário não encontrado.' }, getOrigin(event));
+    }
 
-      // Capturar o valor de is_first_login ANTES de atualizar
-      const isFirstLogin = user.is_first_login;
-
-      // Se for primeiro login, atualizar flag para false
-      if (isFirstLogin) {
-        await knex('users')
-          .where({ id: user.id })
-          .update({ 
-            is_first_login: false,
-            updated_at: knex.fn.now()
-          });
-        console.log(`Usuário ${user.email} - is_first_login atualizado para false`);
-      }
-
-      // Calcular flag de admin consultando perfis de acesso do usuário
-      const ADMIN_PROFILE_ID = 'b36dd047-1634-4a89-97f3-127688104dd0';
-      const userProfiles = await knex('user_access_profiles')
+    const [userCompany, accessProfiles] = await Promise.all([
+      knex('user_company')
         .where({ user_id: user.id })
-        .pluck('access_profile_id');
-      const isAdmin = Array.isArray(userProfiles) && userProfiles.includes(ADMIN_PROFILE_ID);
+        .first(),
+      knex('user_access_profiles')
+        .where({ user_id: user.id })
+        .pluck('access_profile_id')
+    ]);
 
-      // Retornar os dados do usuário com headers CORS (inclui isAdmin e isFirstLogin)
-      return createResponse(200, { 
-        user: { 
-          ...user, 
-          isAdmin,
-          isFirstLogin // Retorna o valor ANTES de atualizar
-        } 
-      }, origin);
-    } catch (dbError) {
-      console.error('Erro específico na conexão com o banco de dados:', dbError);
-      return createResponse(500, { 
-        message: 'Erro na conexão com o banco de dados', 
-        error: dbError.message,
-        stack: dbError.stack
-      }, origin);
-    }
-  } catch (error) {
-    console.error('Erro ao buscar usuário por email:', error);
-    
-    return createResponse(500, { 
-      message: 'Erro ao processar solicitação',
-      error: error.message,
-      stack: error.stack
-    }, getOrigin(event));
+    const adminProfiles = await knex('access_profiles')
+      .where({ admin: true })
+      .pluck('id');
+
+    const isAdmin = Array.isArray(accessProfiles) && 
+                   Array.isArray(adminProfiles) &&
+                   accessProfiles.some(profileId => adminProfiles.includes(profileId));
+
+    const userData = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      isAdmin: isAdmin || false,
+      isFirstLogin: user.is_first_login !== undefined ? user.is_first_login : true,
+      companyId: userCompany?.company_id || null,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+    };
+
+    return createResponse(200, { user: userData }, getOrigin(event));
+
+  } catch (err) {
+    console.error('Erro ao buscar usuário por email:', err);
+    return createResponse(500, { message: 'Erro interno ao buscar usuário.', details: err.message }, getOrigin(event));
   }
+};
+
+module.exports = {
+  handler: getUserByEmail,
 };

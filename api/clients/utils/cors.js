@@ -60,7 +60,7 @@ function isAllowedOrigin(origin) {
 function buildCorsHeaders(origin) {
   const base = {
     'Access-Control-Allow-Credentials': true,
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,x-user-id,X-User-Id',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     Vary: 'Origin',
   };

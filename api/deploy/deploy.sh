@@ -816,7 +816,9 @@ fi
 
 # Deploy para AWS usando o Serverless Framework
 echo -e "${BLUE}Iniciando deploy para AWS no ambiente $STAGE...${NC}"
-npx serverless deploy --force --stage $STAGE
+echo -e "${BLUE}Usando perfil AWS: $AWS_PROFILE${NC}"
+echo -e "${BLUE}Confirmando perfil AWS antes do deploy: $AWS_PROFILE${NC}"
+npx serverless deploy --force --stage $STAGE --aws-profile "$AWS_PROFILE"
 DEPLOY_EXIT_CODE=$?
 
 # Restaurar plugin se foi desabilitado para staging
