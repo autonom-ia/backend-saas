@@ -1,0 +1,83 @@
+exports.up = async function(knex) {
+  const hasPlaceId = await knex.schema.hasColumn('contact', 'place_id');
+  const hasUid = await knex.schema.hasColumn('contact', 'uid');
+  const hasIcpTier = await knex.schema.hasColumn('contact', 'icp_tier');
+  const hasIcpScore = await knex.schema.hasColumn('contact', 'icp_score');
+  const hasBestChannel = await knex.schema.hasColumn('contact', 'best_channel');
+  const hasContactValue = await knex.schema.hasColumn('contact', 'contact_value');
+  const hasActionPlan = await knex.schema.hasColumn('contact', 'action_plan');
+  const hasSignals = await knex.schema.hasColumn('contact', 'signals');
+  const hasCompanyName = await knex.schema.hasColumn('contact', 'company_name');
+  const hasCompanyType = await knex.schema.hasColumn('contact', 'company_type');
+  const hasCompanyStatus = await knex.schema.hasColumn('contact', 'company_status');
+  const hasCompanySite = await knex.schema.hasColumn('contact', 'company_site');
+  const hasGoogleMapsUrl = await knex.schema.hasColumn('contact', 'google_maps_url');
+  const hasRating = await knex.schema.hasColumn('contact', 'rating');
+  const hasReviews = await knex.schema.hasColumn('contact', 'reviews');
+  const hasCity = await knex.schema.hasColumn('contact', 'city');
+  const hasState = await knex.schema.hasColumn('contact', 'state');
+  const hasAddress = await knex.schema.hasColumn('contact', 'address');
+
+  await knex.schema.alterTable('contact', (table) => {
+    if (!hasPlaceId) table.string('place_id');
+    if (!hasUid) table.string('uid');
+    if (!hasIcpTier) table.string('icp_tier');
+    if (!hasIcpScore) table.integer('icp_score');
+    if (!hasBestChannel) table.string('best_channel');
+    if (!hasContactValue) table.string('contact_value');
+    if (!hasActionPlan) table.string('action_plan');
+    if (!hasSignals) table.string('signals');
+    if (!hasCompanyName) table.string('company_name');
+    if (!hasCompanyType) table.string('company_type');
+    if (!hasCompanyStatus) table.string('company_status');
+    if (!hasCompanySite) table.string('company_site');
+    if (!hasGoogleMapsUrl) table.string('google_maps_url');
+    if (!hasRating) table.decimal('rating', 3, 1);
+    if (!hasReviews) table.integer('reviews');
+    if (!hasCity) table.string('city');
+    if (!hasState) table.string('state');
+    if (!hasAddress) table.string('address');
+  });
+};
+
+exports.down = async function(knex) {
+  const hasPlaceId = await knex.schema.hasColumn('contact', 'place_id');
+  const hasUid = await knex.schema.hasColumn('contact', 'uid');
+  const hasIcpTier = await knex.schema.hasColumn('contact', 'icp_tier');
+  const hasIcpScore = await knex.schema.hasColumn('contact', 'icp_score');
+  const hasBestChannel = await knex.schema.hasColumn('contact', 'best_channel');
+  const hasContactValue = await knex.schema.hasColumn('contact', 'contact_value');
+  const hasActionPlan = await knex.schema.hasColumn('contact', 'action_plan');
+  const hasSignals = await knex.schema.hasColumn('contact', 'signals');
+  const hasCompanyName = await knex.schema.hasColumn('contact', 'company_name');
+  const hasCompanyType = await knex.schema.hasColumn('contact', 'company_type');
+  const hasCompanyStatus = await knex.schema.hasColumn('contact', 'company_status');
+  const hasCompanySite = await knex.schema.hasColumn('contact', 'company_site');
+  const hasGoogleMapsUrl = await knex.schema.hasColumn('contact', 'google_maps_url');
+  const hasRating = await knex.schema.hasColumn('contact', 'rating');
+  const hasReviews = await knex.schema.hasColumn('contact', 'reviews');
+  const hasCity = await knex.schema.hasColumn('contact', 'city');
+  const hasState = await knex.schema.hasColumn('contact', 'state');
+  const hasAddress = await knex.schema.hasColumn('contact', 'address');
+
+  await knex.schema.alterTable('contact', (table) => {
+    if (hasPlaceId) table.dropColumn('place_id');
+    if (hasUid) table.dropColumn('uid');
+    if (hasIcpTier) table.dropColumn('icp_tier');
+    if (hasIcpScore) table.dropColumn('icp_score');
+    if (hasBestChannel) table.dropColumn('best_channel');
+    if (hasContactValue) table.dropColumn('contact_value');
+    if (hasActionPlan) table.dropColumn('action_plan');
+    if (hasSignals) table.dropColumn('signals');
+    if (hasCompanyName) table.dropColumn('company_name');
+    if (hasCompanyType) table.dropColumn('company_type');
+    if (hasCompanyStatus) table.dropColumn('company_status');
+    if (hasCompanySite) table.dropColumn('company_site');
+    if (hasGoogleMapsUrl) table.dropColumn('google_maps_url');
+    if (hasRating) table.dropColumn('rating');
+    if (hasReviews) table.dropColumn('reviews');
+    if (hasCity) table.dropColumn('city');
+    if (hasState) table.dropColumn('state');
+    if (hasAddress) table.dropColumn('address');
+  });
+};

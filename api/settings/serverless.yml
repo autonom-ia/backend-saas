@@ -167,6 +167,16 @@ functions:
           method: post
           cors: true
 
+  createContactBySearch:
+    handler: handlers/create-contact-by-search.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/CreateContactBySearch
+          method: post
+          cors: true
+
   getContactByExternalCode:
     handler: handlers/get-contact-by-external-code.handler
     layers:
