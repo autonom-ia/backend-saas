@@ -30,7 +30,14 @@ exports.handler = withCors(async (event) => {
       source: "agent_prompts",
     }));
 
-    const allItems = [...typeInstructions, ...editablePrompts];
+    const allItems = [...typeInstructions, ...editablePrompts].sort(
+      (a, b) => {
+        if (!a.code && !b.code) return 0;
+        if (!a.code) return 1;
+        if (!b.code) return -1;
+        return a.code.localeCompare(b.code);
+      }
+    );
 
     return success(
       {

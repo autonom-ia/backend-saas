@@ -119,14 +119,14 @@ const getExpirationHours = async (accountId) => {
       console.log(`Valor de horas de expiração para a conta ${accountId}: ${expirationHours}`);
       return expirationHours;
     } else {
-      // Se não encontrar o parâmetro, usar valor padrão de 72 horas
-      console.log(`Parâmetro expiration-unassigned-hours não encontrado para a conta ${accountId}, usando valor padrão de 72 horas`);
-      return 72;
+      // Se não encontrar o parâmetro, usar valor padrão de 99999 horas
+      console.log(`Parâmetro expiration-unassigned-hours não encontrado para a conta ${accountId}, usando valor padrão de 99999 horas`);
+      return 99999;
     }
   } catch (error) {
     console.error(`Erro ao buscar horas de expiração para a conta ${accountId}:`, error);
-    // Em caso de erro, usar valor padrão de 72 horas
-    return 72;
+    // Em caso de erro, usar valor padrão de 99999 horas
+    return 99999;
   }
 };
 
