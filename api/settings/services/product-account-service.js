@@ -40,29 +40,60 @@ async function buildAgentInstructions(db, product, accountId) {
   if (!product) return '';
   const blocks = [];
 
+  const collator = new Intl.Collator('pt-BR', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+
+  const items = [];
+
   if (product.product_type_id) {
     const rows = await db('product_type_instruction')
       .where('product_type_id', product.product_type_id)
-      .select('code', 'description', 'instruction')
-      .orderBy([{ column: 'code', order: 'asc' }]);
+      .select('code', 'description', 'instruction');
+
     for (const r of rows) {
-      const code = r.code || '';
-      const desc = r.description || '';
-      const instr = r.instruction || '';
-      const header = code && desc ? `${code} - ${desc}` : (code || desc);
-      const title = header ? `### ${header}` : '###';
-      blocks.push(`${title}\n${instr}`.trim());
+      items.push({
+        source: 'product_type_instruction',
+        code: r.code || '',
+        description: r.description || '',
+        content: r.instruction || '',
+      });
     }
   }
 
   const prompts = await db('agent_prompts')
-    .where({ product_id: product.id, is_deleted: false, is_active: true })
-    .orderBy('code', 'asc')
-    .orderBy('created_at', 'desc');
+    .where({ product_id: product.id, is_deleted: false, is_active: true });
 
   for (const prompt of prompts) {
-    const title = prompt.title ? `### ${prompt.title}` : '###';
-    const content = prompt.content || '';
+    items.push({
+      source: 'agent_prompt',
+      code: prompt.code || '',
+      title: prompt.title || '',
+      content: prompt.content || '',
+    });
+  }
+
+  const sortedItems = items.sort((a, b) => {
+    const codeA = a.code || '';
+    const codeB = b.code || '';
+    return collator.compare(codeA, codeB);
+  });
+
+  for (const item of sortedItems) {
+    const code = item.code || '';
+    const desc = item.description || '';
+    const titleFromPrompt = item.title || '';
+
+    let header = '';
+    if (item.source === 'product_type_instruction') {
+      header = code && desc ? `${code} - ${desc}` : (code || desc);
+    } else {
+      header = titleFromPrompt || code;
+    }
+
+    const title = header ? `### ${header}` : '###';
+    const content = item.content || '';
     blocks.push(`${title}\n${content}`.trim());
   }
 
