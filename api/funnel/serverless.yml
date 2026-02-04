@@ -140,6 +140,20 @@ functions:
           method: delete
           cors: true
 
+  getKanbanItemsCountByStage:
+    handler: handlers/get-kanban-items-count-by-stage.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Funnel/KanbanItemsCountByStage
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                domain: true
+
 package:
   individually: true
   patterns:

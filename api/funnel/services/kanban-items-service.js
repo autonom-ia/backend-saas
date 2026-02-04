@@ -50,6 +50,37 @@ const listKanbanItems = async (params = {}) => {
 };
 
 /**
+ * Retorna a quantidade de itens do kanban por etapa (kanban_code ou name),
+ * filtrando por domain de company via joins em product e account.
+ * @param {{ domain: string }} params
+ */
+const countKanbanItemsByStageForDomain = async (params = {}) => {
+  const { domain } = params;
+  if (!domain) {
+    throw new Error('Parâmetro domain é obrigatório');
+  }
+
+  const db = await getDbConnection();
+
+  const rows = await db('kanban_items as ki')
+    .join('account as a', 'a.id', 'ki.account_id')
+    .join('product as p', 'p.id', 'a.product_id')
+    .join('company as c', 'c.id', 'p.company_id')
+    .leftJoin('conversation_funnel_step as s', 's.id', 'ki.funnel_stage_id')
+    .where('c.domain', domain)
+    .groupBy('s.kanban_code', 's.name')
+    .select(
+      db.raw('COALESCE(s.kanban_code, s.name) as stage_key'),
+      db.raw('COUNT(ki.id) as total')
+    );
+
+  return rows.map((row) => ({
+    stage: row.stage_key,
+    count: Number(row.total) || 0,
+  }));
+};
+
+/**
  * Busca um item por ID (com joins para nomes)
  */
 const getKanbanItem = async (id) => {
@@ -121,4 +152,5 @@ module.exports = {
   createKanbanItem,
   updateKanbanItem,
   deleteKanbanItem,
+  countKanbanItemsByStageForDomain,
 };
