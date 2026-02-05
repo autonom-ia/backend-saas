@@ -1,0 +1,126 @@
+
+service: autonomia-api-waha
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-domain-manager
+
+custom:
+  customDomain:
+    domainName: api-waha.autonomia.site
+    basePath: ''
+    stage: ${opt:stage, 'staging'}
+    certificateId: 'cee74474-da0c-4aba-b9f7-3759e4eddd7e'
+    createRoute53Record: false
+    endpointType: 'edge'
+  authorizer:
+    name: cognitoAuthorizer
+    type: COGNITO_USER_POOLS
+    identitySource: method.request.header.Authorization
+    arn: !ImportValue autonomia-api-auth-${self:provider.stage}-UserPoolArn
+
+layers:
+  commonLibs:
+    path: layers/common
+    name: ${self:service}-${self:provider.stage}-common
+    compatibleRuntimes:
+      - nodejs18.x
+
+package:
+  individually: true
+  patterns:
+    - '!**/*.map'
+    - '!**/*.md'
+    - '!test/**'
+    - '!tests/**'
+    - '!**/.env*'
+    - '!package-lock.json'
+    - '!**/.npmrc'
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!layers/**'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'staging'}
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  environment:
+    NODE_ENV: ${self:provider.stage}
+    DB_HOST: ${ssm:/autonomia/${self:provider.stage}/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
+    DB_PORT: ${ssm:/autonomia/${self:provider.stage}/db/port, '5432'}
+    DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}
+    DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
+    DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
+    DB_SSL_ENABLED: ${ssm:/autonomia/${self:provider.stage}/db/ssl-enabled, 'false'}
+    WAHA_PROXY_SERVER: ${ssm:/autonomia/${self:provider.stage}/waha/proxy/server, ''}
+    WAHA_PROXY_USERNAME: ${ssm:/autonomia/${self:provider.stage}/waha/proxy/username, ''}
+    WAHA_PROXY_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/waha/proxy/password, ''}
+    CHATWOOT_OUTGOING_URL: ${ssm:/autonomia/${self:provider.stage}/waha/chatwoot/outgoing-url, 'https://auto.autonomia.site/webhook/input-follow'}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - rds:*
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ec2:CreateNetworkInterface
+        - ec2:DescribeNetworkInterfaces
+        - ec2:DeleteNetworkInterface
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+      Resource: "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
+    - Effect: Allow
+      Action:
+        - elasticache:*
+      Resource: "*"
+
+functions:
+  createSession:
+    handler: handlers/create-session.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/CreateSession
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+      - http:
+          path: Autonomia/Waha/CreateSession
+          method: options
+          cors: true
+  connectionState:
+    handler: handlers/connection-state.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/ConnectionState
+          method: get
+          cors: true
+          authorizer: ${self:custom.authorizer}
+      - http:
+          path: Autonomia/Waha/ConnectionState
+          method: options
+          cors: true
+
+  syncWhatsappEnvironment:
+    handler: handlers/sync-whatsapp-environment.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/SyncWhatsappEnvironment
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+      - http:
+          path: Autonomia/Waha/SyncWhatsappEnvironment
+          method: options
+          cors: true

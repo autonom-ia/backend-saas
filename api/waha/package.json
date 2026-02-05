@@ -1,0 +1,19 @@
+
+{
+  "name": "autonomia-api-waha",
+  "version": "1.0.0",
+  "private": true,
+  "main": "handlers/create-session.js",
+  "license": "UNLICENSED",
+  "scripts": {
+    "deploy": "serverless deploy --stage prod",
+    "deploy:staging": "serverless deploy --stage staging",
+    "deploy:prod": "serverless deploy --stage prod"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "serverless": "^3.35.2",
+    "serverless-domain-manager": "^8.0.0"
+  }
+}
+

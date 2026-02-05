@@ -153,6 +153,8 @@ functions:
             parameters:
               querystrings:
                 domain: true
+                productId: true
+                accountId: true
 
 package:
   individually: true
