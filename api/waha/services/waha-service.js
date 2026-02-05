@@ -393,6 +393,8 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
 
   const slug = `${normalizedAccount}${normalizedInbox}`;
 
+  const appId = `app_${slug}`;
+
   const baseWhatsappUrl = String(whatsappApiUrl).replace(/\/$/, '');
   const baseChatwootUrl = String(chatwootUrl).replace(/\/$/, '');
 
@@ -402,10 +404,7 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
     headers: { api_access_token: String(chatwootToken).trim() },
   });
 
-  // A URL do webhook deve ser estável por inbox/conta, mas não deve depender de um número
-  // de telefone fixo. Mantemos a estrutura original do path e usamos o nome normalizado da
-  // inbox no lugar do número fixo, preservando o slug como identificador único.
-  const webhookUrl = `${baseWhatsappUrl}/webhooks/chatwoot/${normalizedInbox}/${slug}`;
+  const webhookUrl = `${baseWhatsappUrl}/webhooks/chatwoot/${normalizedInbox}/${appId}`;
 
   let chatwootInboxId;
   let inboxResp;
@@ -594,7 +593,6 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
     null;
 
   const wahaClient = await getWahaClient(accountId);
-  const appId = `app_${slug}`;
 
   const appBody = {
     id: appId,
