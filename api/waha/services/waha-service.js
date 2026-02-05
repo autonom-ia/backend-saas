@@ -402,7 +402,10 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
     headers: { api_access_token: String(chatwootToken).trim() },
   });
 
-  const webhookUrl = `${baseWhatsappUrl}/webhooks/chatwoot/5542999060155/${slug}`;
+  // A URL do webhook deve ser estável por inbox/conta, mas não deve depender de um número
+  // de telefone fixo. Mantemos a estrutura original do path e usamos o nome normalizado da
+  // inbox no lugar do número fixo, preservando o slug como identificador único.
+  const webhookUrl = `${baseWhatsappUrl}/webhooks/chatwoot/${normalizedInbox}/${slug}`;
 
   let chatwootInboxId;
   let inboxResp;
@@ -516,23 +519,57 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
 
   let botId;
   try {
-    const { data: botResp } = await cwAccount.post(
-      `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/agent_bots`,
-      botBody,
-    );
+    // Primeiro, tentar reutilizar um Agent Bot existente para esta conta
+    try {
+      const { data: botsResp } = await cwAccount.get(
+        `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/agent_bots`,
+      );
 
-    botId = botResp?.id || botResp?.data?.id;
-    if (!botId) {
-      throw new Error('Falha ao criar Agent Bot no Chatwoot: ID ausente na resposta');
+      const existingBot = Array.isArray(botsResp?.data)
+        ? botsResp.data[0]
+        : Array.isArray(botsResp?.payload)
+        ? botsResp.payload[0]
+        : null;
+
+      if (existingBot && (existingBot.id || existingBot.data?.id)) {
+        botId = existingBot.id || existingBot.data?.id;
+        console.log('[Waha.syncWhatsappEnvironment] Reusing existing Agent bot', {
+          accountId,
+          inboxId,
+          chatwootAccountId,
+          chatwootInboxId,
+          botId,
+        });
+      }
+    } catch (listErr) {
+      console.warn('[Waha.syncWhatsappEnvironment] Failed to list existing Agent bots; will try to create one', {
+        accountId,
+        inboxId,
+        chatwootAccountId,
+        message: listErr && listErr.message,
+      });
     }
 
-    console.log('[Waha.syncWhatsappEnvironment] Agent bot created', {
-      accountId,
-      inboxId,
-      chatwootAccountId,
-      chatwootInboxId,
-      botId,
-    });
+    // Se não encontrou nenhum existente, criar um novo
+    if (!botId) {
+      const { data: botResp } = await cwAccount.post(
+        `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/agent_bots`,
+        botBody,
+      );
+
+      botId = botResp?.id || botResp?.data?.id;
+      if (!botId) {
+        throw new Error('Falha ao criar Agent Bot no Chatwoot: ID ausente na resposta');
+      }
+
+      console.log('[Waha.syncWhatsappEnvironment] Agent bot created', {
+        accountId,
+        inboxId,
+        chatwootAccountId,
+        chatwootInboxId,
+        botId,
+      });
+    }
 
     await cwAccount.post(
       `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes/${encodeURIComponent(
