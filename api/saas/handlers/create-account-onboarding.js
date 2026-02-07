@@ -17,7 +17,7 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Corpo da requisição inválido' }, 400);
     }
 
-    const { 
+    const {
       accountName,
       accountEmail,
       accountPhone,
@@ -25,6 +25,8 @@ exports.handler = async (event) => {
       parameters = {},
       user_id,
       document,
+      productPlanId: bodyProductPlanId,
+      sessionId: bodySessionId,
     } = body;
 
     // Validações
@@ -187,14 +189,46 @@ exports.handler = async (event) => {
       // Não interrompe a criação da conta
     }
 
-    return success({ 
+    // Assinatura é completada pelo frontend (browser → financial-service) para evitar Lambda em VPC chamar API/Lambda (exige VPC Endpoint ou NAT). Quando há productPlanId, retornamos subscriptionPlanRequired + accountId/document/productId para o front chamar POST /account-subscriptions/complete.
+    const productPlanId = bodyProductPlanId ?? body.productPlanId ?? body.product_plan_id ?? null;
+    const subscriptionPlanRequired = !!productPlanId;
+    if (productPlanId) {
+      console.log('[create-account-onboarding] productPlanId enviado; frontend completará assinatura via financial-service:', productPlanId);
+    }
+
+    // Marcar is_first_login = false para que getUserByEmail retorne o valor correto e o usuário saia do loop de onboarding
+    try {
+      const userContext = await getUserFromEvent(event);
+      const jwtUserId = userContext && userContext.user && userContext.user.id;
+      const effectiveUserId = jwtUserId || user_id;
+      if (effectiveUserId) {
+        const updated = await knex('users')
+          .where({ id: effectiveUserId })
+          .update({ is_first_login: false, updated_at: knex.fn.now() });
+        if (updated) {
+          console.log('[create-account-onboarding] is_first_login atualizado para false (userId):', effectiveUserId);
+        }
+      }
+    } catch (firstLoginErr) {
+      console.error('[create-account-onboarding] Falha ao atualizar is_first_login:', firstLoginErr?.message || firstLoginErr);
+      // Não interrompe; o front pode usar cookie/updateUserFirstLogin como fallback
+    }
+
+    const payload = { 
       success: true, 
       message: 'Conta criada com sucesso', 
       data: { 
         ...created,
         parametersCreated: true 
       } 
-    }, 201);
+    };
+    if (subscriptionPlanRequired) {
+      payload.subscriptionPlanRequired = true;
+      payload.accountId = accountId;
+      payload.document = document != null ? document : (created.document || null);
+      payload.productId = productId;
+    }
+    return success(payload, 201);
   } catch (error) {
     console.error('Erro ao criar conta (onboarding):', error);
     return errorResponse({ 

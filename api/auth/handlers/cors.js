@@ -49,11 +49,11 @@ function isAllowedOrigin(origin) {
     console.log('[CORS] No origin provided');
     return false;
   }
-  
+
   // Em staging, aceitar localhost e domínios da Vercel
   const isStaging = process.env.NODE_ENV === 'staging';
   console.log('[CORS] Origin:', origin, 'NODE_ENV:', process.env.NODE_ENV, 'isStaging:', isStaging);
-  
+
   if (isStaging) {
     if (isLocalhost(origin)) {
       console.log('[CORS] Allowed: localhost');
@@ -64,13 +64,13 @@ function isAllowedOrigin(origin) {
       return true;
     }
   }
-  
+
   // Verificar origens permitidas específicas
   if (allowedLocalOrigins.has(origin)) {
     console.log('[CORS] Allowed: in allowedLocalOrigins set');
     return true;
   }
-  
+
   // Verificar origens autonomia.site
   const isAutonomia = isAllowedAutonomiaOrigin(origin);
   if (isAutonomia) {
