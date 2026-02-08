@@ -1,119 +1,170 @@
-
 const { getDbConnection } = require('../utils/database');
 
-// Perfil padrão para novos usuários (ver dívida técnica para remover ID fixo)
 const DEFAULT_ACCESS_PROFILE_ID = 'e8cbb607-4a3a-44c6-8669-a5c6d2bd5e17';
 
-/**
- * Normaliza o domínio removendo protocolo e trailing slash
- * @param {string} domain - Domínio a ser normalizado
- * @returns {string} Domínio normalizado
- */
 const normalizeDomain = (domain) => {
   if (!domain) return domain;
-  
-  // Remove protocolo (http://, https://)
-  let normalized = domain.replace(/^https?:\/\//i, '');
-  
-  // Remove trailing slash
-  normalized = normalized.replace(/\/$/, '');
-  
-  return normalized;
+  const withoutProtocol = domain.replace(/^https?:\/\//i, '');
+  return withoutProtocol.replace(/\/$/, '');
 };
 
-const registerUser = async ({ email, name, phone, domain, access_profile_id }) => {
-  const knex = getDbConnection();
-  let companyId;
+const findCompanyByDomain = async (knex, domain) => {
+  const normalizedDomain = normalizeDomain(domain);
+  const byNormalized = await knex('company').where({ domain: normalizedDomain }).first();
+  if (byNormalized) return byNormalized;
 
-  // 1. Encontrar a empresa (company) pelo domínio informado
+  const byRaw = await knex('company').where({ domain }).first();
+  if (byRaw) return byRaw;
+
+  const byLike = await knex('company')
+    .where('domain', 'like', `%${normalizedDomain}%`)
+    .orWhere('domain', 'like', `%${domain}%`)
+    .first();
+  if (byLike) return byLike;
+
+  const existingCompanies = await knex('company')
+    .whereNotNull('domain')
+    .select('domain')
+    .limit(5);
+  const domainsList = existingCompanies.map((c) => c.domain).join(', ') || 'nenhum domínio encontrado';
+  throw new Error(
+    `Nenhuma empresa encontrada para o domínio: ${domain} (normalizado: ${normalizedDomain}). Domínios existentes em company: ${domainsList}`
+  );
+};
+
+const ensureUserCompany = async (transaction, userId, companyId) => {
+  if (!companyId) return;
+  const hasCompany = await transaction('user_company')
+    .where({ user_id: userId, company_id: companyId })
+    .first();
+  if (hasCompany) return;
+  await transaction('user_company').insert({ user_id: userId, company_id: companyId });
+};
+
+const ensureUserProfile = async (transaction, userId, profileId) => {
+  if (!profileId) return;
+  const profile = await transaction('access_profiles').where({ id: profileId }).first();
+  if (!profile) return;
+  const hasProfile = await transaction('user_access_profiles')
+    .where({ user_id: userId, access_profile_id: profile.id })
+    .first();
+  if (hasProfile) return;
+  await transaction('user_access_profiles').insert({
+    user_id: userId,
+    access_profile_id: profile.id,
+  });
+};
+
+const ensureUserAccountsForLinkNewUser = async (transaction, userId, companyId) => {
+  if (!companyId) return;
+  const productIds = await transaction('product').where({ company_id: companyId }).pluck('id');
+  if (!Array.isArray(productIds) || productIds.length === 0) return;
+
+  const linkProducts = await transaction('product_parameter')
+    .whereIn('product_id', productIds)
+    .andWhere({ name: 'link_new_user', value: 'TRUE' })
+    .pluck('product_id');
+  if (!Array.isArray(linkProducts) || linkProducts.length === 0) return;
+
+  const accountIds = await transaction('account').whereIn('product_id', linkProducts).pluck('id');
+  if (!Array.isArray(accountIds) || accountIds.length === 0) return;
+
+  for (const accountId of accountIds) {
+    const hasAccount = await transaction('user_accounts')
+      .where({ user_id: userId, account_id: accountId })
+      .first();
+    if (hasAccount) continue;
+    await transaction('user_accounts').insert({ user_id: userId, account_id: accountId });
+  }
+};
+
+const ensureExistingUserAssociations = async (
+  transaction,
+  existingUser,
+  companyId,
+  access_profile_id
+) => {
+  const userId = existingUser.id;
+  const profileId = DEFAULT_ACCESS_PROFILE_ID || access_profile_id;
+
+  await ensureUserCompany(transaction, userId, companyId);
+  await ensureUserProfile(transaction, userId, profileId);
+  await ensureUserAccountsForLinkNewUser(transaction, userId, companyId);
+};
+
+const linkNewUserToCompany = async (transaction, newUser, companyId) => {
+  if (!companyId) return;
+  await transaction('user_company').insert({
+    user_id: newUser.id,
+    company_id: companyId,
+  });
+};
+
+const linkNewUserToProfile = async (transaction, newUser, access_profile_id) => {
+  const profileId = DEFAULT_ACCESS_PROFILE_ID || access_profile_id;
+  if (!profileId) return;
+
+  const profile = await transaction('access_profiles').where({ id: profileId }).first();
+  if (!profile) {
+    throw new Error(`Perfil de acesso não encontrado (ID: ${profileId}).`);
+  }
+  await transaction('user_access_profiles').insert({
+    user_id: newUser.id,
+    access_profile_id: profile.id,
+  });
+};
+
+const linkNewUserToAccountsForLinkNewUser = async (transaction, newUser, companyId) => {
+  if (!companyId) return;
+  const productIds = await transaction('product').where({ company_id: companyId }).pluck('id');
+  if (!Array.isArray(productIds) || productIds.length === 0) return;
+
+  const linkProducts = await transaction('product_parameter')
+    .whereIn('product_id', productIds)
+    .andWhere({ name: 'link_new_user', value: 'TRUE' })
+    .pluck('product_id');
+  if (!Array.isArray(linkProducts) || linkProducts.length === 0) return;
+
+  const accountIds = await transaction('account').whereIn('product_id', linkProducts).pluck('id');
+  if (!Array.isArray(accountIds) || accountIds.length === 0) return;
+
+  const rows = accountIds.map((accountId) => ({
+    user_id: newUser.id,
+    account_id: accountId,
+  }));
+  await transaction('user_accounts').insert(rows);
+};
+
+const getCompanyIdByDomain = async (knex, domain) => {
   try {
-    const normalizedDomain = normalizeDomain(domain);
-    
-    let company = await knex('company').where({ domain: normalizedDomain }).first();
-    if (!company) {
-      company = await knex('company').where({ domain }).first();
-    }
-    if (!company) {
-      company = await knex('company')
-        .where('domain', 'like', `%${normalizedDomain}%`)
-        .orWhere('domain', 'like', `%${domain}%`)
-        .first();
-    }
-    
-    if (!company) {
-      const existingCompanies = await knex('company')
-        .whereNotNull('domain')
-        .select('domain')
-        .limit(5);
-      const domainsList = existingCompanies.map(c => c.domain).join(', ') || 'nenhum domínio encontrado';
-      throw new Error(`Nenhuma empresa encontrada para o domínio: ${domain} (normalizado: ${normalizedDomain}). Domínios existentes em company: ${domainsList}`);
-    }
-    companyId = company.id;
+    const company = await findCompanyByDomain(knex, domain);
+    return company.id;
   } catch (err) {
-    console.error('Erro ao procurar a empresa pelo domínio:', err);
     if (err.message && err.message.includes('Nenhuma empresa encontrada')) {
       throw err;
     }
     throw new Error(`Falha ao verificar o domínio da empresa: ${err.message}`);
   }
+};
 
-  // 2. Criar o utilizador e as associações numa transação 
-  // Incluido para o deploy
+const registerUser = async ({ email, name, phone, domain, access_profile_id }) => {
+  const knex = getDbConnection();
+  const companyId = await getCompanyIdByDomain(knex, domain);
+
   return knex.transaction(async (transaction) => {
-    // Inserir na tabela 'user'
+    const existingUser = await transaction('users').where({ email }).first();
+    if (existingUser) {
+      await ensureExistingUserAssociations(transaction, existingUser, companyId, access_profile_id);
+      return existingUser;
+    }
+
     const [newUser] = await transaction('users')
-      .insert({
-        name,
-        email,
-        phone,
-      })
+      .insert({ name, email, phone })
       .returning('*');
 
-    // Associar utilizador à empresa, se identificada
-    if (companyId) {
-      await transaction('user_company').insert({
-        user_id: newUser.id,
-        company_id: companyId,
-      });
-    }
-
-    // 3. Associar perfil de acesso padrão fixo (DEFAULT_ACCESS_PROFILE_ID)
-    const profileId = DEFAULT_ACCESS_PROFILE_ID || access_profile_id;
-    if (profileId) {
-      const profile = await transaction('access_profiles').where({ id: profileId }).first();
-      if (!profile) {
-        throw new Error(`Perfil de acesso não encontrado (ID: ${profileId}).`);
-      }
-      await transaction('user_access_profiles').insert({
-        user_id: newUser.id,
-        access_profile_id: profile.id,
-      });
-    }
-
-    // 4. Vincular o usuário a contas de produtos marcados com link_new_user = 'TRUE'
-    if (companyId) {
-      const productIds = await transaction('product')
-        .where({ company_id: companyId })
-        .pluck('id');
-      if (Array.isArray(productIds) && productIds.length) {
-        const linkProducts = await transaction('product_parameter')
-          .whereIn('product_id', productIds)
-          .andWhere({ name: 'link_new_user', value: 'TRUE' })
-          .pluck('product_id');
-        if (Array.isArray(linkProducts) && linkProducts.length) {
-          const accountIds = await transaction('account')
-            .whereIn('product_id', linkProducts)
-            .pluck('id');
-          if (Array.isArray(accountIds) && accountIds.length) {
-            const rows = accountIds.map((accountId) => ({
-              user_id: newUser.id,
-              account_id: accountId,
-            }));
-            await transaction('user_accounts').insert(rows);
-          }
-        }
-      }
-    }
+    await linkNewUserToCompany(transaction, newUser, companyId);
+    await linkNewUserToProfile(transaction, newUser, access_profile_id);
+    await linkNewUserToAccountsForLinkNewUser(transaction, newUser, companyId);
 
     return newUser;
   });

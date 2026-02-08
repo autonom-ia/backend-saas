@@ -14,7 +14,9 @@ module.exports.handler = async (event) => {
     if (!event.body) {
       throw new Error('Corpo da requisição está vazio.');
     }
-    const { email, confirmationCode } = JSON.parse(event.body);
+    const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    const email = (body.email || '').trim();
+    const confirmationCode = (body.confirmationCode || body.code || '').trim();
 
     if (!email || !confirmationCode) {
       return createResponse(400, { message: 'Email e código de confirmação são obrigatórios.' }, getOrigin(event));

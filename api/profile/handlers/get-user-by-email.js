@@ -23,31 +23,26 @@ const getUserByEmail = async (event) => {
       return createResponse(404, { message: 'Usuário não encontrado.' }, getOrigin(event));
     }
 
-    const [userCompany, accessProfiles] = await Promise.all([
-      knex('user_company')
-        .where({ user_id: user.id })
-        .first(),
-      knex('user_access_profiles')
-        .where({ user_id: user.id })
-        .pluck('access_profile_id')
-    ]);
+    const userProfileIds = await knex('user_access_profiles')
+      .where({ user_id: user.id })
+      .pluck('access_profile_id');
 
-    const adminProfiles = await knex('access_profiles')
-      .where({ admin: true })
-      .pluck('id');
-
-    const isAdmin = Array.isArray(accessProfiles) && 
-                   Array.isArray(adminProfiles) &&
-                   accessProfiles.some(profileId => adminProfiles.includes(profileId));
+    const adminProfileRow =
+      userProfileIds?.length > 0
+        ? await knex('access_profiles')
+            .whereIn('id', userProfileIds)
+            .where({ admin: true })
+            .first()
+        : null;
+    const isAdmin = !!adminProfileRow;
 
     const userData = {
       id: user.id,
       email: user.email,
       name: user.name,
       phone: user.phone,
-      isAdmin: isAdmin || false,
+      isAdmin,
       isFirstLogin: user.is_first_login !== undefined ? user.is_first_login : true,
-      companyId: userCompany?.company_id || null,
       created_at: user.created_at,
       updated_at: user.updated_at,
     };

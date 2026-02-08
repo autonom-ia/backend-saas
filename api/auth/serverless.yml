@@ -37,6 +37,8 @@ provider:
           Action:
             - "cognito-idp:InitiateAuth"
             - "cognito-idp:SignUp"
+            - "cognito-idp:ConfirmSignUp"
+            - "cognito-idp:ResendConfirmationCode"
             - "cognito-idp:ForgotPassword"
             - "cognito-idp:ConfirmForgotPassword"
             - "cognito-idp:AdminUpdateUserAttributes"
@@ -70,6 +72,16 @@ functions:
     events:
       - http:
           path: /confirm
+          method: post
+          cors: true
+
+  resendConfirmationCode:
+    handler: handlers/resend-confirmation-code.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: /resend-confirmation-code
           method: post
           cors: true
 
