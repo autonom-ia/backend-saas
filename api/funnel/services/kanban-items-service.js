@@ -51,16 +51,11 @@ const listKanbanItems = async (params = {}) => {
 
 /**
  * Retorna a quantidade de itens do kanban por etapa (kanban_code ou name),
- * filtrando por domain de company via joins em product e account,
- * e ainda por product_id e account_id específicos.
- * @param {{ domain: string, productId: string, accountId: string }} params
+ * filtrando apenas por product_id e account_id.
+ * @param {{ productId: string, accountId: string }} params
  */
 const countKanbanItemsByStageForDomain = async (params = {}) => {
-  const { domain, productId, accountId } = params;
-
-  if (!domain) {
-    throw new Error('Parâmetro domain é obrigatório');
-  }
+  const { productId, accountId } = params;
 
   if (!productId) {
     throw new Error('Parâmetro productId é obrigatório');
@@ -75,10 +70,8 @@ const countKanbanItemsByStageForDomain = async (params = {}) => {
   const rows = await db('kanban_items as ki')
     .join('account as a', 'a.id', 'ki.account_id')
     .join('product as p', 'p.id', 'a.product_id')
-    .join('company as c', 'c.id', 'p.company_id')
     .leftJoin('conversation_funnel_step as s', 's.id', 'ki.funnel_stage_id')
-    .where('c.domain', domain)
-    .andWhere('p.id', productId)
+    .where('p.id', productId)
     .andWhere('a.id', accountId)
     .groupBy('s.kanban_code', 's.name')
     .select(

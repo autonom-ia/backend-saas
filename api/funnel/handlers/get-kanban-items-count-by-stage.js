@@ -10,13 +10,8 @@ const { closeDbConnection } = require('../utils/database');
 exports.handler = async (event) => {
   try {
     const qs = event.queryStringParameters || {};
-    const domain = qs.domain;
     const productId = qs.productId || qs.product_id;
     const accountId = qs.accountId || qs.account_id;
-
-    if (!domain) {
-      return error('Parâmetro domain é obrigatório', 400);
-    }
 
     if (!productId) {
       return error('Parâmetro productId é obrigatório', 400);
@@ -26,7 +21,7 @@ exports.handler = async (event) => {
       return error('Parâmetro accountId é obrigatório', 400);
     }
 
-    const result = await countKanbanItemsByStageForDomain({ domain, productId, accountId });
+    const result = await countKanbanItemsByStageForDomain({ productId, accountId });
 
     await closeDbConnection();
     return success(result);
