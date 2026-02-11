@@ -21,23 +21,80 @@ const normalizeDomain = (domain) => {
   return normalized;
 };
 
+// Regras de resolução de domínio para lookup de company:
+// 1 - localhost = autonomia
+// 2 - portal.<DOMINIO>.xxx = <DOMINIO>
+// 3 - <SUBDOMINIO>.autonomia.site = <SUBDOMINIO>
+// 4 - Qualquer outro padrão = autonomia
+// Quando o valor não contém ponto (ex: "autonomia", "hub2you"), assume-se que já é o slug correto.
+const resolveCompanyDomainForLookup = (inputDomain) => {
+  if (!inputDomain) {
+    return 'autonomia';
+  }
+
+  // Primeiro normaliza removendo protocolo, path, query, fragmento e porta
+  const withoutProtocol = inputDomain.replace(/^https?:\/\//i, '');
+  const hostnamePart = withoutProtocol.split('/')[0].split('?')[0].split('#')[0];
+  const hostname = hostnamePart.split(':')[0].toLowerCase();
+
+  if (!hostname) {
+    return 'autonomia';
+  }
+
+  // Se não há ponto, consideramos que já é o slug correto (ex: "autonomia", "hub2you")
+  if (!hostname.includes('.')) {
+    return hostname;
+  }
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'autonomia';
+  }
+
+  if (hostname.startsWith('portal.')) {
+    const parts = hostname.split('.');
+    if (parts.length >= 3) {
+      return parts[1];
+    }
+    return 'autonomia';
+  }
+
+  if (hostname.endsWith('.autonomia.site')) {
+    const parts = hostname.split('.');
+    if (parts.length >= 3) {
+      return parts[0];
+    }
+    return 'autonomia';
+  }
+
+  return 'autonomia';
+};
+
 const registerUser = async ({ email, name, phone, domain, access_profile_id }) => {
   const knex = getDbConnection();
   let companyId;
 
   // 1. Encontrar a empresa (company) pelo domínio informado
   try {
-    const normalizedDomain = normalizeDomain(domain);
+    const resolvedDomain = resolveCompanyDomainForLookup(domain);
+    const normalizedDomain = normalizeDomain(resolvedDomain);
     
     let company = await knex('company').where({ domain: normalizedDomain }).first();
     if (!company) {
-      company = await knex('company').where({ domain }).first();
+      company = await knex('company').where({ domain: resolvedDomain }).first();
     }
     if (!company) {
-      company = await knex('company')
+      const candidates = await knex('company')
         .where('domain', 'like', `%${normalizedDomain}%`)
-        .orWhere('domain', 'like', `%${domain}%`)
-        .first();
+        .orWhere('domain', 'like', `%${resolvedDomain}%`)
+        .select('*');
+
+      if (Array.isArray(candidates) && candidates.length === 1) {
+        company = candidates[0];
+      }
+      if (Array.isArray(candidates) && candidates.length > 1) {
+        const domainsList = candidates.map(c => c.domain).join(', ');
+        throw new Error(`Mais de uma empresa encontrada para o domínio: ${domain} (normalizado: ${normalizedDomain}). Domínios encontrados: ${domainsList}`);
+      }
     }
     
     if (!company) {

@@ -32,10 +32,12 @@ function isAllowedAutonomiaOrigin(origin) {
     const url = new URL(origin);
     const { protocol, hostname } = url;
     if (protocol !== 'https:' && protocol !== 'http:') return false;
+
+    // Permitir qualquer domínio autonomia.site (raiz ou subdomínio)
     if (hostname === 'autonomia.site') return true;
-    if (hostname === 'hub2you.ai') return true;
-    if (hostname === 'portal-autonomia.vercel.app') return true;
-    return hostname.endsWith('.autonomia.site') || hostname.endsWith('.hub2you.ai');
+    if (hostname.endsWith('.autonomia.site')) return true;
+
+    return false;
   } catch (_) {
     return false;
   }
