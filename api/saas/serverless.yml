@@ -6,6 +6,11 @@ plugins:
   - serverless-domain-manager
 
 custom:
+  # Mapeamento stage backend-saas -> stage financial-service (para invocação Lambda)
+  financialServiceStageMap:
+    prod: production
+    staging: staging
+  financialServiceStage: ${self:custom.financialServiceStageMap.${self:provider.stage}, self:provider.stage}
   customDomain:
     domainName: api-saas.autonomia.site
     basePath: ''
@@ -72,6 +77,11 @@ provider:
     KNOWLEDGE_PUBLIC_BASE: ${ssm:/autonomia/${self:provider.stage}/knowledge/public-base, 'https://autonomia-knowledge-docs.s3.amazonaws.com'}
     EVS_PRODUCT_ID: ${ssm:/autonomia/saas/EVS_PRODUCT_ID, ''}
     EUVIAJO_CLIENT_API_TOKEN: ${ssm:/autonomia/saas/EUVIAJO_CLIENT_API_TOKEN, ''}
+    # URL do financial-service (usado só se invocação Lambda não estiver configurada). Para sincronizar: no repo financial-service execute ./scripts/sync-financial-api-url-ssm.sh production prod us-east-1.
+    FINANCIAL_SERVICE_URL: ${ssm:/financial-service/${self:provider.stage}/api-url, ''}
+    # Invocação direta da Lambda do financial-service (evita HTTP; Lambdas em VPC sem NAT não alcançam API Gateway). Backend stage prod -> financial stage production.
+    FINANCIAL_SERVICE_CREATE_SUBSCRIPTION_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-createAccountSubscription
+    FINANCIAL_SERVICE_ASSOCIATE_ONBOARDING_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-associateOnboardingData
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -86,7 +96,14 @@ provider:
     - Effect: Allow
       Action:
         - ssm:GetParameter
-      Resource: "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
+      Resource:
+        - "arn:aws:ssm:us-east-1:*:parameter/autonomia/*"
+        - "arn:aws:ssm:us-east-1:*:parameter/financial-service/*"
+    - Effect: Allow
+      Action: lambda:InvokeFunction
+      Resource:
+        - "arn:aws:lambda:us-east-1:*:function:fin-account-subscriptions-${self:custom.financialServiceStage}-createAccountSubscription"
+        - "arn:aws:lambda:us-east-1:*:function:fin-account-subscriptions-${self:custom.financialServiceStage}-associateOnboardingData"
     - Effect: Allow
       Action:
         - elasticache:*
@@ -266,6 +283,16 @@ functions:
                 domain: false
           authorizer: ${self:custom.authorizer}
 
+  getUserPermissions:
+    handler: handlers/get-user-permissions.handler
+    description: Retorna permissões do usuário (canSeeAll = admin autonomia) para uso no financial-service
+    events:
+      - http:
+          path: Autonomia/Saas/UserPermissions
+          method: get
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
   getAccount:
     handler: handlers/get-account.handler
     events:
@@ -284,6 +311,16 @@ functions:
     events:
       - http:
           path: Autonomia/Saas/Accounts
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+
+  completeAccountSubscription:
+    handler: handlers/complete-account-subscription.handler
+    description: Completa assinatura quando o usuário escolhe o plano após criar conta (subscriptionPlanRequired)
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/CompleteSubscription
           method: post
           cors: true
           authorizer: ${self:custom.authorizer}
@@ -534,6 +571,7 @@ functions:
 
   createAccountOnboarding:
     handler: handlers/create-account-onboarding.handler
+    timeout: 60
     events:
       - http:
           path: Autonomia/Saas/Onboarding/Accounts

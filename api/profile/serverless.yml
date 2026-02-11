@@ -175,6 +175,20 @@ provider:
       Resource: "*"
 
 functions:
+  getAccessProfiles:
+    handler: handlers/get-access-profiles.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Profile/AccessProfiles
+          method: options
+          cors: false
+      - http:
+          path: Autonomia/Profile/AccessProfiles
+          method: get
+          cors: false
+
   registerUser:
     handler: handlers/register.handler
     layers:
