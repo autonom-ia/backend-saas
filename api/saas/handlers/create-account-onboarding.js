@@ -74,15 +74,18 @@ exports.handler = async (event) => {
       // Não interrompe a criação da conta
     }
 
-    // Criar inbox automaticamente
+    // Criar inbox automaticamente (normalizando telefone com DDI 55)
     try {
-      const phoneTrimmed = accountPhone.toString().trim();
-      if (phoneTrimmed) {
+      const rawPhone = accountPhone.toString().trim();
+      if (rawPhone) {
+        const digits = rawPhone.replace(/\D/g, '');
+        const normalizedPhone = digits.startsWith('55') ? digits : `55${digits}`;
+
         const exists = await knex('inbox')
-          .where({ account_id: accountId, name: phoneTrimmed })
+          .where({ account_id: accountId, name: normalizedPhone })
           .first();
         if (!exists) {
-          await createInbox({ account_id: accountId, name: phoneTrimmed });
+          await createInbox({ account_id: accountId, name: normalizedPhone });
         }
       }
     } catch (inbErr) {
