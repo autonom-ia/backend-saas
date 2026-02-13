@@ -1,4 +1,5 @@
 const axios = require('axios');
+const knex = require('knex');
 const { getDbConnection } = require('../utils/database');
 
 // Helper to fetch parameter with fallback: account_parameter -> product_parameter
@@ -113,6 +114,43 @@ async function getInboxForAccount(accountId, inboxId) {
   }
 
   return inbox;
+}
+
+// Cria conexão com banco de dados do Chatwoot usando account_id (mesma estratégia dos serviços de clients/evolution)
+async function createChatwootDbConnection(systemAccountId) {
+  try {
+    const db = getDbConnection();
+    console.log(`Buscando configuração do Chatwoot para account_id: ${systemAccountId}`);
+
+    const hostParam = await db('account_parameter')
+      .select('value')
+      .where({ account_id: systemAccountId, name: 'chatwoot_db_host' })
+      .first();
+
+    if (!hostParam || !hostParam.value) {
+      throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado para account_id=${systemAccountId}`);
+    }
+
+    const host = hostParam.value;
+    const port = 5432;
+    const name = 'chatwoot';
+    const user = 'postgres';
+    const password = 'Mfcd62!!Mfcd62!!';
+
+    console.log(`Conectando ao banco Chatwoot em ${host}:${port}/${name}`);
+
+    const chatwootDb = knex({
+      client: 'pg',
+      connection: { host, port, database: name, user, password, ssl: false },
+      pool: { min: 0, max: 2 },
+    });
+
+    await chatwootDb.raw('SELECT 1');
+    return chatwootDb;
+  } catch (error) {
+    console.error('Erro ao criar conexão com banco de dados do Chatwoot:', error);
+    throw new Error(`Erro ao criar conexão com banco de dados do Chatwoot: ${error.message}`);
+  }
 }
 
 async function createSession(accountId, payload) {
@@ -338,6 +376,24 @@ async function provisionChatwoot(accountId) {
       .insert({ account_id: account.id, name: 'chatwoot-account', value: String(chatwootAccountId) });
   }
 
+  // Também associar o usuário com id=1 como administrador da conta no Chatwoot,
+  // garantindo que o token desse usuário tenha acesso à nova account.
+  try {
+    await cw.post(
+      `/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users`,
+      { user_id: 1, role: 'administrator' },
+    );
+  } catch (e) {
+    try {
+      console.warn('[Chatwoot] Falha ao associar user_id=1', {
+        chatwootAccountId,
+        error: e?.message || e,
+      });
+    } catch (_) {
+      // ignora erro de log
+    }
+  }
+
   return {
     chatwootAccountId: String(chatwootAccountId).trim(),
     chatwootToken: String(chatwootToken).trim(),
@@ -410,6 +466,33 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
   let inboxResp;
 
   try {
+    // Garantir feature_flags configurado corretamente na account do Chatwoot antes de manipular inbox/Agent Bot
+    let chatwootDb;
+    try {
+      chatwootDb = await createChatwootDbConnection(accountId);
+      console.log('[Waha.syncWhatsappEnvironment] Atualizando feature_flags na conta Chatwoot', {
+        accountId,
+        chatwootAccountId,
+      });
+      await chatwootDb.raw('UPDATE accounts SET feature_flags = ? WHERE id = ?', [
+        '288235736303927231',
+        chatwootAccountId,
+      ]);
+      console.log('[Waha.syncWhatsappEnvironment] feature_flags atualizado com sucesso');
+    } catch (ffErr) {
+      console.warn('[Waha.syncWhatsappEnvironment] Não foi possível atualizar feature_flags', {
+        accountId,
+        chatwootAccountId,
+        error: ffErr?.message || ffErr,
+      });
+    } finally {
+      if (chatwootDb) {
+        try {
+          await chatwootDb.destroy();
+        } catch {}
+      }
+    }
+
     if (existingInboxParam) {
       chatwootInboxId = existingInboxParam;
       console.log('[Waha.syncWhatsappEnvironment] Using existing Chatwoot inbox', {
