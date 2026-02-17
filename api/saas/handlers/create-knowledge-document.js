@@ -21,11 +21,11 @@ exports.handler = withCors(async (event) => {
     let document_url = body.document_url || null;
 
     if (file_base64) {
-      // Basic size guard: API Gateway REST max payload ~10MB
+      // Basic size guard: permitir uploads diretos de até ~25MB (limite aproximado)
       const approxBytes = Math.ceil((file_base64.length * 3) / 4); // base64 -> bytes approx
       console.log('[KB] incoming base64 size ~bytes', approxBytes);
-      if (approxBytes > 9.5 * 1024 * 1024) {
-        return errorResponse({ success: false, message: 'Arquivo excede o limite de 10MB para upload direto. Use upload assinado.' }, 413, event);
+      if (approxBytes > 24.5 * 1024 * 1024) {
+        return errorResponse({ success: false, message: 'Arquivo excede o limite de 25MB para upload direto. Use upload assinado.' }, 413, event);
       }
       const bucket = process.env.KNOWLEDGE_BUCKET;
       if (!bucket) {
