@@ -12,13 +12,19 @@ exports.handler = withCors(async (event) => {
     const body = typeof event.body === 'string' ? JSON.parse(event.body || '{}') : (event.body || {});
     console.log('[KB] parsed body keys', Object.keys(body || {}));
 
-    // Expect JSON with base64 content
-    const { filename, file_extension, file_base64, file_mime, account_id, category, category_id, document_types } = body;
+    // Expect JSON with either:
+    // - file_base64 (+ file_extension/file_mime) to upload directly, OR
+    // - document_url already uploaded to S3 (recommended path for grandes arquivos)
+    const { filename, file_extension, file_base64, file_mime, account_id, category, category_id, document_types, document_url: bodyDocumentUrl } = body;
     if (!filename || !account_id) {
       return errorResponse({ success: false, message: 'filename e account_id são obrigatórios' }, 400, event);
     }
 
-    let document_url = body.document_url || null;
+    let document_url = bodyDocumentUrl || null;
+
+    if (!file_base64 && !document_url) {
+      return errorResponse({ success: false, message: 'É necessário enviar file_base64 ou document_url' }, 400, event);
+    }
 
     if (file_base64) {
       // Basic size guard: permitir uploads diretos de até ~25MB (limite aproximado)
