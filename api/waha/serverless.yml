@@ -124,3 +124,18 @@ functions:
           path: Autonomia/Waha/SyncWhatsappEnvironment
           method: options
           cors: true
+
+  createChatwootAttendanceUser:
+    handler: handlers/create-chatwoot-attendance-user.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/CreateChatwootAttendanceUser
+          method: post
+          cors: true
+          authorizer: ${self:custom.authorizer}
+      - http:
+          path: Autonomia/Waha/CreateChatwootAttendanceUser
+          method: options
+          cors: true

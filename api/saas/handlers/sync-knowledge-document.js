@@ -82,6 +82,20 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'Falha ao chamar processamento RAG', status: resp.status, statusText: resp.statusText, body: t }, 502);
     }
 
+    // Garantir que o documento permaneça visível após a sincronização
+    try {
+      const knex = getDbConnection();
+      await knex('knowledge_document')
+        .where({ id: doc.id })
+        .update({ deleted: false, updated_at: knex.fn.now() });
+    } catch (e) {
+      console.warn('[syncKnowledgeDocument] Falha ao reforçar deleted = false para documento', {
+        documentId: doc.id,
+        error: e?.message,
+      });
+      // Não falhar a sincronização por causa disso
+    }
+
     return success({ success: true, message: 'Sincronização disparada com sucesso', data: { document_id: doc.id, account_id: accountId } }, 202);
   } catch (err) {
     console.error('Erro ao sincronizar documento do conhecimento:', err);

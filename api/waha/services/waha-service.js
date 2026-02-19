@@ -741,8 +741,92 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
   };
 }
 
+// Cria um usuário de atendimento no Chatwoot para a conta informada e o associa como administrador.
+async function createChatwootAttendanceUser(accountId, email, password) {
+  if (!accountId) {
+    throw new Error('account_id is required');
+  }
+
+  if (!email || !password) {
+    throw new Error('email and password are required');
+  }
+
+  const { chatwootAccountId, chatwootToken, chatwootUrl } = await provisionChatwoot(accountId);
+
+  let platformTokenRaw = await getParameterValue(accountId, 'chatwoot-platform-token', {
+    required: false,
+    aliases: ['CHATWOOT_PLATFORM_TOKEN'],
+  });
+
+  if (!platformTokenRaw) {
+    platformTokenRaw = process.env.CHATWOOT_PLATFORM_TOKEN || 'h5Gj43DZYb5HnY75gpGwUE3T';
+  }
+
+  const platformToken = String(platformTokenRaw).replace(/[\r\n\t\v\f]/g, '').trim();
+
+  const cw = axios.create({
+    baseURL: chatwootUrl,
+    timeout: 20000,
+    headers: { api_access_token: platformToken },
+  });
+
+  const cwAccount = axios.create({
+    baseURL: chatwootUrl,
+    timeout: 20000,
+    headers: { api_access_token: String(chatwootToken).trim() },
+  });
+
+  const userBody = {
+    name: email,
+    email,
+    password,
+  };
+
+  const { data: userResp } = await cw.post('/platform/api/v1/users', userBody);
+  const userId = userResp?.id || userResp?.data?.id;
+
+  if (!userId) {
+    throw new Error('Falha ao criar usuário no Chatwoot: user_id ausente');
+  }
+
+  const assocBody = { user_id: userId, role: 'administrator' };
+
+  await cw.post(
+    `/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users`,
+    assocBody,
+  );
+  const db = getDbConnection();
+
+  const user = await db('users')
+    .where({ email })
+    .first();
+
+  if (!user) {
+    throw new Error(`Usuário não encontrado no banco para o email: ${email}`);
+  }
+
+  const existingUserAccount = await db('user_accounts')
+    .where({ user_id: user.id, account_id: accountId })
+    .first();
+
+  if (existingUserAccount) {
+    await db('user_accounts')
+      .where({ id: existingUserAccount.id })
+      .update({ has_chat_support: true, updated_at: db.fn.now() });
+  } else {
+    await db('user_accounts').insert({ user_id: user.id, account_id: accountId, has_chat_support: true });
+  }
+
+  return {
+    userId,
+    chatwootAccountId: String(chatwootAccountId).trim(),
+    chatwootUrl,
+  };
+}
+
 module.exports = {
   createSession,
   connectionState,
   syncWhatsappEnvironment,
+  createChatwootAttendanceUser,
 };

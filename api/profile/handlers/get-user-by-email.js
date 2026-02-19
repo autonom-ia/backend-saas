@@ -36,6 +36,10 @@ const getUserByEmail = async (event) => {
         : null;
     const isAdmin = !!adminProfileRow;
 
+    const userAccounts = await knex('user_accounts')
+      .where({ user_id: user.id })
+      .select('account_id', 'has_chat_support');
+
     const userData = {
       id: user.id,
       email: user.email,
@@ -45,6 +49,7 @@ const getUserByEmail = async (event) => {
       isFirstLogin: user.is_first_login !== undefined ? user.is_first_login : true,
       created_at: user.created_at,
       updated_at: user.updated_at,
+      user_accounts: userAccounts.map(account => ({ account_id: account.account_id, has_chat_support: account.has_chat_support })),
     };
 
     return createResponse(200, { user: userData }, getOrigin(event));
