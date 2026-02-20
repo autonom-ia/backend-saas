@@ -24,6 +24,17 @@ const getProductsForUser = async (userId) => {
     .orderBy('p.created_at', 'desc');
 };
 
+const getProductsByDomain = async (domain) => {
+  const knex = getDbConnection();
+  return knex('product as p')
+    .distinct('p.*', 'product_type.description as product_type_description', 'product_type.id as product_type_id')
+    .join('company as c', 'p.company_id', 'c.id')
+    .leftJoin('product_type', 'p.product_type_id', 'product_type.id')
+    .where('c.domain', domain)
+    .andWhere('p.is_approved', true)
+    .orderBy('p.created_at', 'desc');
+};
+
 /**
  * Busca um produto pelo ID
  * @param {string} id - ID do produto
@@ -136,4 +147,5 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductsByDomain,
 };
