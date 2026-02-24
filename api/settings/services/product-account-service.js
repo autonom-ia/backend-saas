@@ -5,6 +5,33 @@ const { getDbConnection } = require('../utils/database');
 const { getCache, setCache } = require('../utils/cache');
 const { formatParameters } = require('../utils/format-parameters');
 
+const ensureContactForUserSession = async (db, params) => {
+  if (params.contact_id) {
+    return params.contact_id;
+  }
+
+  const baseName = params.name || '';
+  const trimmedName = baseName.trim();
+  const hasName = trimmedName.length > 0;
+  const fallbackName = params.phone || 'Contato';
+  const name = hasName ? trimmedName : fallbackName;
+
+  const [createdContact] = await db('contact')
+    .insert({
+      name,
+      phone: params.phone || null,
+      account_id: params.account_id,
+      contact_data: {},
+    })
+    .returning('*');
+
+  if (!createdContact || !createdContact.id) {
+    throw new Error('Falha ao criar contato para a user_session');
+  }
+
+  return createdContact.id;
+};
+
 function getValueFromPath(obj, path) {
   try {
     return path
@@ -223,15 +250,25 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
       .where('account_id', accountId)
       .select('*');
 
-    // 4.1. Se não existir user_session, criar agora
+    // 4.1. Se não existir user_session, criar agora, garantindo contact_id
     if (!userSessions || userSessions.length === 0) {
       console.log('Nenhuma user_session encontrada. Criando nova sessão...');
+
+      const contactId = await ensureContactForUserSession(db, {
+        contact_id: null,
+        name: null,
+        phone,
+        account_id: accountId,
+      });
+
       const insertData = {
         account_id: accountId,
         phone,
+        contact_id: contactId,
         // opcional: atrelar produto da conta se existir
         product_id: products && products[0] ? products[0].id : productId || null,
       };
+
       const [createdSession] = await db('user_session')
         .insert(insertData)
         .returning('*');
@@ -241,6 +278,33 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
       } else {
         console.warn('Falha ao criar user_session. Prosseguindo sem sessão.');
       }
+    }
+
+    if (userSessions && userSessions.length > 0) {
+      const fixedSessions = [];
+
+      for (const session of userSessions) {
+        if (session.contact_id) {
+          fixedSessions.push(session);
+          continue;
+        }
+
+        const contactId = await ensureContactForUserSession(db, {
+          contact_id: session.contact_id,
+          name: session.name,
+          phone: session.phone,
+          account_id: session.account_id,
+        });
+
+        const [sessionWithContact] = await db('user_session')
+          .where({ id: session.id })
+          .update({ contact_id: contactId })
+          .returning('*');
+
+        fixedSessions.push(sessionWithContact || session);
+      }
+
+      userSessions = fixedSessions;
     }
 
     // Formatar os parâmetros de array para objeto e colocá-los diretamente na raiz

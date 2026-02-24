@@ -4,6 +4,33 @@
 const { getDbConnection } = require('../utils/database');
 const { getCache, invalidateCache } = require('../utils/cache');
 
+const ensureContactForSession = async (db, params) => {
+  if (params.contact_id) {
+    return params.contact_id;
+  }
+
+  const baseName = params.name || '';
+  const trimmedName = baseName.trim();
+  const hasName = trimmedName.length > 0;
+  const fallbackName = params.phone || 'Contato';
+  const name = hasName ? trimmedName : fallbackName;
+
+  const [createdContact] = await db('contact')
+    .insert({
+      name,
+      phone: params.phone || null,
+      account_id: params.account_id,
+      contact_data: {},
+    })
+    .returning('*');
+
+  if (!createdContact || !createdContact.id) {
+    throw new Error('Falha ao criar contato para a sessão de usuário');
+  }
+
+  return createdContact.id;
+};
+
 /**
  * Cria uma nova sessão de usuário no sistema ou retorna uma existente com o mesmo telefone e conta
  * @param {Object} sessionData - Dados da sessão do usuário
@@ -47,27 +74,65 @@ const createUserSession = async (sessionData) => {
       console.log(`Sessão existente encontrada com ID: ${existingSession.id}`);
       const hasIncomingName = typeof sessionData.name === 'string' && sessionData.name.trim().length > 0;
       const storedNameMissing = existingSession.name == null || String(existingSession.name).trim().length === 0;
+
       if (hasIncomingName && storedNameMissing) {
         console.log('Atualizando name da user_session existente (estava nulo/vazio)...');
         const [updated] = await db('user_session')
           .where({ id: existingSession.id })
           .update({ name: sessionData.name })
           .returning('*');
-        return updated || existingSession;
+
+        const sessionWithName = updated || existingSession;
+        const contactId = await ensureContactForSession(db, {
+          contact_id: sessionWithName.contact_id,
+          name: sessionWithName.name,
+          phone: sessionWithName.phone || sessionData.phone,
+          account_id: sessionWithName.account_id || sessionData.account_id,
+        });
+
+        const [sessionWithContact] = await db('user_session')
+          .where({ id: sessionWithName.id })
+          .update({ contact_id: contactId })
+          .returning('*');
+
+        return sessionWithContact || sessionWithName;
       }
+
+      if (!existingSession.contact_id) {
+        const contactId = await ensureContactForSession(db, {
+          contact_id: existingSession.contact_id,
+          name: existingSession.name || sessionData.name,
+          phone: existingSession.phone || sessionData.phone,
+          account_id: existingSession.account_id || sessionData.account_id,
+        });
+
+        const [sessionWithContact] = await db('user_session')
+          .where({ id: existingSession.id })
+          .update({ contact_id: contactId })
+          .returning('*');
+
+        return sessionWithContact || existingSession;
+      }
+
       return existingSession;
     }
     
     console.log('Nenhuma sessão existente encontrada. Criando nova sessão...');
     
     // Preparar dados para inserção
+    const contactIdForNewSession = await ensureContactForSession(db, {
+      contact_id: sessionData.contact_id,
+      name: sessionData.name,
+      phone: sessionData.phone,
+      account_id: sessionData.account_id,
+    });
+
     const newSession = {
       name: sessionData.name,
       phone: sessionData.phone,
       account_id: sessionData.account_id,
       product_id: sessionData.product_id,
-      // optional link to contact
-      contact_id: sessionData.contact_id || null,
+      contact_id: contactIdForNewSession,
       created_at: new Date()
       // A tabela user_session não possui o campo updated_at
     };
@@ -186,6 +251,25 @@ const updateUserSession = async (id, updateData) => {
     
     if (!updatedSession) {
       return null;
+    }
+
+    if (!updatedSession.contact_id && updatedSession.account_id && updatedSession.phone) {
+      const contactId = await ensureContactForSession(db, {
+        contact_id: updatedSession.contact_id,
+        name: updatedSession.name,
+        phone: updatedSession.phone,
+        account_id: updatedSession.account_id,
+      });
+
+      const [sessionWithContact] = await db('user_session')
+        .where({ id: updatedSession.id })
+        .update({ contact_id: contactId })
+        .returning('*');
+
+      if (sessionWithContact) {
+        // Sobrescrever updatedSession para refletir o novo contact_id
+        Object.assign(updatedSession, sessionWithContact);
+      }
     }
 
     // Invalidar cache relacionado se houver telefone nos dados
