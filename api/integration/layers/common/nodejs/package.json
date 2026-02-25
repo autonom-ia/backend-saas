@@ -11,6 +11,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "ioredis": "^5.8.2"
+    "ioredis": "^5.8.2",
+    "knex": "^2.5.1",
+    "pg": "^8.16.3"
   }
 }
