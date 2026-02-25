@@ -42,6 +42,8 @@ provider:
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, ''}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
     CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'} # 5 minutos em segundos
+    WEBHOOK_APPLICATION_TOKEN: ${ssm:/webhook-service/${self:provider.stage}/application-token, ''}
+    WEBHOOK_EVENTS_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/140023375763/webhook-service-events-queue-${self:provider.stage}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -49,6 +51,11 @@ provider:
         - ssm:GetParameters
       Resource:
         - arn:aws:ssm:us-east-1:727799789224:parameter/autonomia/*
+    - Effect: Allow
+      Action:
+        - sqs:SendMessage
+      Resource:
+        - arn:aws:sqs:us-east-1:140023375763:webhook-service-events-queue-${self:provider.stage}
 
 functions:
   getAccountFunnel:
@@ -112,6 +119,7 @@ functions:
 
   createKanbanItem:
     handler: handlers/create-kanban-item.handler
+    vpc: null
     layers:
       - { Ref: CommonLibsLambdaLayer }
     events:
@@ -122,6 +130,7 @@ functions:
 
   updateKanbanItem:
     handler: handlers/update-kanban-item.handler
+    vpc: null
     layers:
       - { Ref: CommonLibsLambdaLayer }
     events:

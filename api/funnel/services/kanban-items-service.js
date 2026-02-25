@@ -2,6 +2,7 @@
  * Serviço para operações em kanban_items
  */
 const { getDbConnection } = require('../utils/database');
+const { sendContactWebhookForKanbanItem } = require('../utils/webhook');
 
 // Campos permitidos para criação/atualização
 const updatableFields = [
@@ -121,6 +122,9 @@ const createKanbanItem = async (data) => {
   insertData.updated_at = db.fn.now();
 
   const [created] = await db('kanban_items').insert(insertData).returning('*');
+
+  await sendContactWebhookForKanbanItem(db, created);
+
   return created;
 };
 
@@ -139,6 +143,9 @@ const updateKanbanItem = async (id, data) => {
     .where('id', id)
     .update(updateData)
     .returning('*');
+
+  await sendContactWebhookForKanbanItem(db, updated);
+
   return updated;
 };
 

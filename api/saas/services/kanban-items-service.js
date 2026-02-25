@@ -3,6 +3,7 @@
  * (cópia adaptada do módulo funnel, utilizando utilitários do SAAS)
  */
 const { getDbConnection } = require('../utils/database');
+const { sendContactWebhookForKanbanItem } = require('../utils/webhook');
 
 // Campos permitidos para criação/atualização (mantido para futura expansão)
 const updatableFields = [
@@ -71,7 +72,11 @@ const listKanbanItems = async (params = {}) => {
  */
 const updateKanbanItem = async (id, data) => {
   const db = await getDbConnection();
-  
+  console.log('[SAAS KanbanItems] Iniciando updateKanbanItem', {
+    id,
+    dataKeys: Object.keys(data || {}),
+  });
+
   const payload = {};
   for (const field of updatableFields) {
     if (field in data) {
@@ -81,13 +86,40 @@ const updateKanbanItem = async (id, data) => {
   
   // Sempre atualizar updated_at
   payload.updated_at = db.fn.now();
-  
+  console.log('[SAAS KanbanItems] Payload de updateKanbanItem montado', {
+    id,
+    payloadKeys: Object.keys(payload),
+  });
+
   const result = await db('kanban_items')
     .where({ id })
     .update(payload)
     .returning('*');
-  
-  return result[0];
+
+  const updated = result[0];
+  console.log('[SAAS KanbanItems] kanban_item atualizado, preparando envio de webhook', {
+    id,
+    kanbanItemId: updated && updated.id,
+    user_session_id: updated && updated.user_session_id,
+  });
+
+  try {
+    const startedAt = Date.now();
+    await sendContactWebhookForKanbanItem(db, updated);
+    console.log('[SAAS KanbanItems] Webhook de contato enviado (ou ignorado) com sucesso', {
+      id,
+      durationMs: Date.now() - startedAt,
+    });
+  } catch (err) {
+    console.error('[SAAS KanbanItems] Erro ao enviar webhook de contato para kanban_item', {
+      id,
+      errorMessage: err && err.message,
+      errorName: err && err.name,
+      errorStack: err && err.stack,
+    });
+  }
+
+  return updated;
 };
 
 module.exports = {

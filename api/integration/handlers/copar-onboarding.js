@@ -1,42 +1,15 @@
 const { callCoparOnboarding } = require('../services/copar-service');
 const { getDbConnection } = require('../utils/database');
-const axios = require('axios');
-const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
+const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 
-const WEBHOOK_INGEST_URL = process.env.WEBHOOK_INGEST_URL || 'https://api-webhook.autonomia.site/webhooks';
-
-let cachedWebhookToken = null;
-let cachedWebhookTokenPromise = null;
+const WEBHOOK_EVENTS_QUEUE_URL = process.env.WEBHOOK_EVENTS_QUEUE_URL || '';
 
 const getWebhookApplicationToken = async () => {
-  if (cachedWebhookToken) {
-    return cachedWebhookToken;
+  const token = process.env.WEBHOOK_APPLICATION_TOKEN || '';
+  if (!token) {
+    console.warn('[Copar Handler] WEBHOOK_APPLICATION_TOKEN não está definido nas variáveis de ambiente.');
   }
-
-  if (cachedWebhookTokenPromise) {
-    return cachedWebhookTokenPromise;
-  }
-
-  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-  const ssmClient = new SSMClient({ region });
-
-  cachedWebhookTokenPromise = ssmClient
-    .send(new GetParameterCommand({
-      Name: '/webhook-service/prod/application-token',
-      WithDecryption: true,
-    }))
-    .then((res) => {
-      const value = res && res.Parameter && res.Parameter.Value ? res.Parameter.Value : '';
-      cachedWebhookToken = value;
-      return value;
-    })
-    .catch((err) => {
-      console.error('[Copar Handler] Erro ao buscar token do webhook no SSM:', err);
-      cachedWebhookToken = null;
-      throw err;
-    });
-
-  return cachedWebhookTokenPromise;
+  return token;
 };
 
 const parseJsonBody = (event) => {
@@ -97,7 +70,9 @@ exports.handler = async (event) => {
         const applicationToken = await getWebhookApplicationToken();
 
         if (!applicationToken) {
-          console.warn('[Copar Handler] Token de aplicação do webhook não encontrado. Webhook não será chamado.');
+          console.warn('[Copar Handler] Token de aplicação do webhook não encontrado. Evento não será enfileirado.');
+        } else if (!WEBHOOK_EVENTS_QUEUE_URL) {
+          console.warn('[Copar Handler] WEBHOOK_EVENTS_QUEUE_URL não configurada. Evento não será enfileirado.');
         } else {
           const webhookPayload = {
             accountId: userSession.account_id,
@@ -109,21 +84,39 @@ exports.handler = async (event) => {
             },
           };
 
-          console.log('[Copar Handler] Enviando webhook de atualização de contato', {
-            url: WEBHOOK_INGEST_URL,
+          const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+          console.log('[Copar Handler] Enfileirando evento de webhook de atualização de contato no SQS', {
+            queueUrl: WEBHOOK_EVENTS_QUEUE_URL,
+            region,
             accountId: userSession.account_id,
             contactId,
+            entity: webhookPayload.entity,
+            action: webhookPayload.action,
           });
 
-          await axios.post(WEBHOOK_INGEST_URL, webhookPayload, {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-application-token': applicationToken,
-            },
+          const sqs = new SQSClient({ region });
+          const queueMessageBody = {
+            accountId: webhookPayload.accountId,
+            entity: webhookPayload.entity,
+            action: webhookPayload.action,
+            payload: webhookPayload.payload,
+          };
+
+          const startedSqsAt = Date.now();
+          await sqs.send(
+            new SendMessageCommand({
+              QueueUrl: WEBHOOK_EVENTS_QUEUE_URL,
+              MessageBody: JSON.stringify(queueMessageBody),
+            })
+          );
+
+          console.log('[Copar Handler] Evento de webhook de contato enfileirado com sucesso no SQS', {
+            queueUrl: WEBHOOK_EVENTS_QUEUE_URL,
+            durationMs: Date.now() - startedSqsAt,
           });
         }
       } catch (webhookErr) {
-        console.error('[Copar Handler] Erro ao chamar webhook de contato:', webhookErr?.response?.data || webhookErr.message || webhookErr);
+        console.error('[Copar Handler] Erro ao enfileirar webhook de contato:', webhookErr?.response?.data || webhookErr.message || webhookErr);
       }
     } else {
       console.warn('[Copar Handler] Nenhuma user_session encontrada para o contact_id. Webhook não será chamado.', {

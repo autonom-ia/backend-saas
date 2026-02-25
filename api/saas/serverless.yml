@@ -77,6 +77,10 @@ provider:
     KNOWLEDGE_PUBLIC_BASE: ${ssm:/autonomia/${self:provider.stage}/knowledge/public-base, 'https://autonomia-knowledge-docs.s3.amazonaws.com'}
     EVS_PRODUCT_ID: ${ssm:/autonomia/saas/EVS_PRODUCT_ID, ''}
     EUVIAJO_CLIENT_API_TOKEN: ${ssm:/autonomia/saas/EUVIAJO_CLIENT_API_TOKEN, ''}
+    # Webhook-service (token e função de ingest). Resolvemos o token via SSM no deploy para evitar chamadas SSM em runtime dentro da VPC.
+    WEBHOOK_APPLICATION_TOKEN: ${ssm:/webhook-service/${self:provider.stage}/application-token, ''}
+    WEBHOOK_INGEST_FUNCTION: webhook-service-ingest-${self:provider.stage}-ingestWebhook
+    WEBHOOK_EVENTS_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/140023375763/webhook-service-events-queue-${self:provider.stage}
     # URL do financial-service (usado só se invocação Lambda não estiver configurada). Para sincronizar: no repo financial-service execute ./scripts/sync-financial-api-url-ssm.sh production prod us-east-1.
     FINANCIAL_SERVICE_URL: ${ssm:/financial-service/${self:provider.stage}/api-url, ''}
     # Invocação direta da Lambda do financial-service (evita HTTP; Lambdas em VPC sem NAT não alcançam API Gateway). Backend stage prod -> financial stage production.
@@ -114,6 +118,11 @@ provider:
         - s3:PutObjectAcl
       Resource:
         - arn:aws:s3:::${ssm:/autonomia/${self:provider.stage}/knowledge/bucket, 'autonomia-knowledge-docs'}/*
+    - Effect: Allow
+      Action:
+        - sqs:SendMessage
+      Resource:
+        - arn:aws:sqs:us-east-1:140023375763:webhook-service-events-queue-${self:provider.stage}
 
 functions:
   listProducts:
@@ -885,6 +894,8 @@ functions:
 
   updateKanbanItem:
     handler: handlers/update-kanban-item.handler
+    # Override provider VPC: this function roda fora da VPC para poder acessar SQS diretamente
+    vpc: null
     events:
       - http:
           path: Autonomia/Saas/KanbanItems/{itemId}
