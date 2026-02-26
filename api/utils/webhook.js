@@ -55,13 +55,15 @@ const sendContactWebhookForKanbanItem = async (db, kanbanItem) => {
     }
 
     let contactData = null;
+    let externalCode = null;
     try {
       const contactRow = await db('contact')
-        .select('contact_data')
+        .select('contact_data', 'external_code')
         .where('id', userSession.contact_id)
         .first();
 
       contactData = contactRow && contactRow.contact_data ? contactRow.contact_data : null;
+      externalCode = contactRow && contactRow.external_code ? contactRow.external_code : null;
     } catch (contactErr) {
       console.warn('[Webhook Utils] Não foi possível carregar contact_data para o contato relacionado. Campo será enviado como null.', {
         contactId: userSession.contact_id,
@@ -87,6 +89,7 @@ const sendContactWebhookForKanbanItem = async (db, kanbanItem) => {
         ...kanbanItem,
         contact_id: userSession.contact_id,
         contact_data: contactData,
+        external_code: externalCode,
         currentStepName: currentStep && currentStep.name ? currentStep.name : null,
         currentStepCode: currentStep && currentStep.kanban_code ? currentStep.kanban_code : null,
         changedAt,

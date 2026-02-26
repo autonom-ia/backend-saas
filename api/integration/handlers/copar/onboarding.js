@@ -1,6 +1,7 @@
-const { callCoparOnboarding } = require('../services/copar-service');
-const { getDbConnection } = require('../utils/database');
+const { callCoparOnboarding } = require('../../services/copar-service');
+const { getDbConnection } = require('../../utils/database');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const { requireInternalToken } = require('../../utils/internal-auth');
 
 const WEBHOOK_EVENTS_QUEUE_URL = process.env.WEBHOOK_EVENTS_QUEUE_URL || '';
 
@@ -28,6 +29,8 @@ const parseJsonBody = (event) => {
 
 exports.handler = async (event) => {
   try {
+    requireInternalToken(event);
+
     const body = parseJsonBody(event);
 
     const contactId = body && body.contact_id ? String(body.contact_id).trim() : '';
@@ -54,7 +57,6 @@ exports.handler = async (event) => {
         updated_at: new Date(),
       });
 
-    // Buscar user_session relacionada a este contato para obter o account_id
     let userSession = null;
     try {
       userSession = await db('user_session')
@@ -79,8 +81,9 @@ exports.handler = async (event) => {
             entity: 'contact',
             action: 'update',
             payload: {
-              ...body,
               contact_id: contactId,
+              contact_data: contactData,
+              external_code: body.external_code || null,
             },
           };
 
@@ -125,9 +128,7 @@ exports.handler = async (event) => {
     }
 
     console.log('[Copar Handler] Body bruto recebido', event.body);
-
     console.log('[Copar Handler] Body parseado', body);
-
     console.log('[Copar Handler] Payload recebido (resumo)', {
       hasPdf: !!body.pdf_conta_luz,
       tipo: body.tipo,
@@ -147,6 +148,14 @@ exports.handler = async (event) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ success: false, message: 'Corpo da requisição inválido' }),
+      };
+    }
+
+    if (err && err.statusCode === 401) {
+      return {
+        statusCode: 401,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: false, message: 'Unauthorized' }),
       };
     }
 

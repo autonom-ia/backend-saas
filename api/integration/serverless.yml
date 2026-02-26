@@ -62,6 +62,7 @@ provider:
     CACHE_TTL: ${ssm:/autonomia/${self:provider.stage}/cache/ttl, '300'}
     WEBHOOK_APPLICATION_TOKEN: ${ssm:/webhook-service/${self:provider.stage}/application-token, ''}
     WEBHOOK_EVENTS_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/140023375763/webhook-service-events-queue-${self:provider.stage}
+    INTERNAL_INTEGRATION_TOKEN: ${ssm:/autonomia/${self:provider.stage}/integration/internal-token, ''}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -85,9 +86,27 @@ provider:
 
 functions:
   coparOnboarding:
-    handler: handlers/copar-onboarding.handler
+    handler: handlers/copar/onboarding.handler
     events:
       - http:
           path: api/v1/integration/copar/onboarding
           method: post
+          cors: true
+
+  listContactsByAccountAndExternalCode:
+    name: integration-contacts-list
+    handler: handlers/contacts/list-by-contact-id.handler
+    events:
+      - http:
+          path: api/v1/integration/contacts
+          method: get
+          cors: true
+
+  updateContactExternalCode:
+    name: integration-contact-update-external-code
+    handler: handlers/contacts/update-external-code.handler
+    events:
+      - http:
+          path: api/v1/integration/contacts/{contactId}/external-code
+          method: put
           cors: true

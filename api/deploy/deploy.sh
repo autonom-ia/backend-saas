@@ -506,21 +506,45 @@ process_js_files() {
   local dir=$1
   local target_dir=$2
   
-  mkdir -p $target_dir
+  mkdir -p "$target_dir"
   
-  for file in $(find $dir -maxdepth 1 -name "*.js"); do
-    filename=$(basename $file)
+  for file in $(find "$dir" -maxdepth 1 -name "*.js"); do
+    filename=$(basename "$file")
     echo -e "${GREEN}Minificando: ${filename}${NC}"
-    terser $file \
+    terser "$file" \
       --compress passes=2,drop_console=false \
       --mangle toplevel=true,reserved=['handler','exports','require','module'] \
-      --output $target_dir/$filename
+      --output "$target_dir/$filename"
   done
 }
 
-# Processar handlers
+# Versão recursiva que preserva subdiretórios (usada para o módulo integration)
+process_js_files_recursive() {
+  local dir=$1
+  local target_dir=$2
+
+  if [ ! -d "$dir" ]; then
+    return
+  fi
+
+  while IFS= read -r -d '' file; do
+    # Caminho relativo em relação ao diretório base
+    rel_path=$(echo "$file" | sed "s|^$dir/||")
+    dest_dir="$target_dir/$(dirname "$rel_path")"
+    mkdir -p "$dest_dir"
+
+    filename=$(basename "$file")
+    echo -e "${GREEN}Minificando (recursivo): ${rel_path}${NC}"
+    terser "$file" \
+      --compress passes=2,drop_console=false \
+      --mangle toplevel=true,reserved=['handler','exports','require','module'] \
+      --output "$dest_dir/$filename"
+  done < <(find "$dir" -type f -name "*.js" -print0)
+}
+
+# Processar handlers (sempre de forma recursiva para suportar subpastas)
 echo -e "${YELLOW}Processando handlers...${NC}"
-process_js_files "$MODULE_DIR/handlers" "$DIST_DIR/handlers"
+process_js_files_recursive "$MODULE_DIR/handlers" "$DIST_DIR/handlers"
 
 # Processar services
 echo -e "${YELLOW}Processando services...${NC}"
