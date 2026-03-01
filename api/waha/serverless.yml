@@ -60,6 +60,7 @@ provider:
     WAHA_PROXY_USERNAME: ${ssm:/autonomia/${self:provider.stage}/waha/proxy/username, ''}
     WAHA_PROXY_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/waha/proxy/password, ''}
     CHATWOOT_OUTGOING_URL: ${ssm:/autonomia/${self:provider.stage}/waha/chatwoot/outgoing-url, 'https://auto.autonomia.site/webhook/input-follow'}
+    INTERNAL_INTEGRATION_TOKEN: ${ssm:/autonomia/${self:provider.stage}/integration/internal-token, ''}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -95,6 +96,19 @@ functions:
           path: Autonomia/Waha/CreateSession
           method: options
           cors: true
+  internalCreateSession:
+    handler: handlers/internal-create-session.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/Internal/Sessions
+          method: post
+          cors: true
+      - http:
+          path: Autonomia/Waha/Internal/Sessions
+          method: options
+          cors: true
   connectionState:
     handler: handlers/connection-state.handler
     layers:
@@ -109,7 +123,19 @@ functions:
           path: Autonomia/Waha/ConnectionState
           method: options
           cors: true
-
+  internalConnectionState:
+    handler: handlers/internal-connection-state.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/Internal/ConnectionState
+          method: get
+          cors: true
+      - http:
+          path: Autonomia/Waha/Internal/ConnectionState
+          method: options
+          cors: true
   syncWhatsappEnvironment:
     handler: handlers/sync-whatsapp-environment.handler
     layers:

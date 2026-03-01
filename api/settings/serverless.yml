@@ -117,6 +117,21 @@ functions:
               querystrings:
                 limit: false
                 offset: false
+
+  listAccountsWithFunnel:
+    handler: handlers/list-accounts-with-funnel.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/ListAccountsWithFunnel
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                limit: false
+                offset: false
   
   listContacts:
     handler: handlers/list-contacts.handler

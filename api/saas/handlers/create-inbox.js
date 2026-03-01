@@ -8,13 +8,13 @@ const { withCors } = require('../utils/cors');
 exports.handler = withCors(async (event) => {
   try {
     const body = JSON.parse(event.body || '{}');
-    const { account_id, name } = body;
+    const { account_id, name, notification_email, contact_name } = body;
 
     if (!account_id || !name) {
       return errorResponse({ success: false, message: 'account_id e name são obrigatórios' }, 400, event);
     }
 
-    const created = await createInbox({ account_id, name });
+    const created = await createInbox({ account_id, name, notification_email, contact_name });
     return success({ success: true, data: created }, 201, event);
   } catch (err) {
     console.error('Erro ao criar inbox:', err);

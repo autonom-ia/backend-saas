@@ -416,7 +416,7 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
 
   console.log('[Waha.syncWhatsappEnvironment] Start', { accountId, inboxId });
 
-  const existingInboxParam = await getParameterValue(accountId, 'chatwoot-inbox', {
+  let existingInboxParam = await getParameterValue(accountId, 'chatwoot-inbox', {
     required: false,
     aliases: ['CHATWOOT_INBOX'],
   });
@@ -465,6 +465,45 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
   let chatwootInboxId;
   let inboxResp;
 
+  // 0) Se já existir uma inbox no Chatwoot com o mesmo nome, reaproveita ela
+  try {
+    const { data: listResp } = await cwAccount.get(
+      `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes`,
+    );
+
+    const items = Array.isArray(listResp?.data)
+      ? listResp.data
+      : Array.isArray(listResp)
+      ? listResp
+      : [];
+
+    const inboxByName = items.find((item) => {
+      const itemName = item?.name || item?.data?.name || '';
+      return String(itemName).trim().toLowerCase() === inboxName.toLowerCase();
+    });
+
+    if (inboxByName && (inboxByName.id || inboxByName.data?.id)) {
+      chatwootInboxId = inboxByName.id || inboxByName.data?.id;
+      inboxResp = inboxByName;
+      existingInboxParam = String(chatwootInboxId);
+
+      console.log('[Waha.syncWhatsappEnvironment] Reusing Chatwoot inbox found by name', {
+        accountId,
+        inboxId,
+        chatwootAccountId,
+        chatwootInboxId,
+        inboxName,
+      });
+    }
+  } catch (listErr) {
+    console.warn('[Waha.syncWhatsappEnvironment] Failed to list Chatwoot inboxes by name; will fallback to parameter/create flow', {
+      accountId,
+      inboxId,
+      chatwootAccountId,
+      message: listErr && listErr.message,
+    });
+  }
+
   try {
     // Garantir feature_flags configurado corretamente na account do Chatwoot antes de manipular inbox/Agent Bot
     let chatwootDb;
@@ -494,7 +533,7 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
     }
 
     if (existingInboxParam) {
-      chatwootInboxId = existingInboxParam;
+      chatwootInboxId = chatwootInboxId || existingInboxParam;
       console.log('[Waha.syncWhatsappEnvironment] Using existing Chatwoot inbox', {
         accountId,
         inboxId,
@@ -512,7 +551,14 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
       const currentWebhookUrl =
         getInboxResp?.channel?.webhook_url || getInboxResp?.data?.channel?.webhook_url;
 
-      if (!currentWebhookUrl) {
+      if (currentWebhookUrl === webhookUrl) {
+        console.log('[Waha.syncWhatsappEnvironment] Existing inbox already has expected webhook', {
+          accountId,
+          inboxId,
+          chatwootInboxId,
+          webhookUrl,
+        });
+      } else {
         const updatedChannel = {
           ...(getInboxResp?.channel || getInboxResp?.data?.channel || {}),
           webhook_url: webhookUrl,
@@ -524,10 +570,11 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
           channel: updatedChannel,
         };
 
-        console.log('[Waha.syncWhatsappEnvironment] Updating existing inbox website_url', {
+        console.log('[Waha.syncWhatsappEnvironment] Updating existing inbox webhook_url', {
           accountId,
           inboxId,
           chatwootInboxId,
+          previousWebhookUrl: currentWebhookUrl,
           webhookUrl,
         });
 

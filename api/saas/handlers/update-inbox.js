@@ -14,9 +14,9 @@ exports.handler = withCors(async (event) => {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const { account_id, name } = body;
+    const { account_id, name, notification_email, contact_name } = body;
 
-    const updated = await updateInbox(inboxId, { account_id, name });
+    const updated = await updateInbox(inboxId, { account_id, name, notification_email, contact_name });
     return success({ success: true, data: updated }, 200, event);
   } catch (err) {
     console.error('Erro ao atualizar inbox:', err);

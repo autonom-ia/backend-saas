@@ -32,16 +32,30 @@ const getInboxById = async (id) => {
 
 /**
  * Cria um novo inbox
- * @param {{ account_id: string, name: string }} data
+ * @param {{ account_id: string, name: string, notification_email?: string, contact_name?: string }} data
  * @returns {Promise<Object>}
  */
-const createInbox = async ({ account_id, name }) => {
+const createInbox = async ({ account_id, name, notification_email, contact_name }) => {
   if (!account_id || !name) {
     throw new Error('account_id e name são obrigatórios');
   }
+
   const knex = getDbConnection();
+  const payload = {
+    account_id,
+    name,
+  };
+
+  if (typeof notification_email === 'string') {
+    payload.notification_email = notification_email || null;
+  }
+
+  if (typeof contact_name === 'string') {
+    payload.contact_name = contact_name || null;
+  }
+
   const [created] = await knex('inbox')
-    .insert({ account_id, name })
+    .insert(payload)
     .returning('*');
   return created;
 };
@@ -49,10 +63,10 @@ const createInbox = async ({ account_id, name }) => {
 /**
  * Atualiza um inbox
  * @param {string} id
- * @param {{ account_id?: string, name?: string }} data
+ * @param {{ account_id?: string, name?: string, notification_email?: string | null, contact_name?: string | null }} data
  * @returns {Promise<Object>}
  */
-const updateInbox = async (id, { account_id, name }) => {
+const updateInbox = async (id, { account_id, name, notification_email, contact_name }) => {
   const knex = getDbConnection();
   // garante existência
   await getInboxById(id);
@@ -60,6 +74,12 @@ const updateInbox = async (id, { account_id, name }) => {
   const update = {};
   if (account_id !== undefined) update.account_id = account_id;
   if (name !== undefined) update.name = name;
+  if (notification_email !== undefined) {
+    update.notification_email = notification_email || null;
+  }
+  if (contact_name !== undefined) {
+    update.contact_name = contact_name || null;
+  }
   if (Object.keys(update).length === 0) {
     throw new Error('Nenhum campo para atualizar');
   }

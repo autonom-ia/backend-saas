@@ -77,6 +77,15 @@ provider:
     KNOWLEDGE_PUBLIC_BASE: ${ssm:/autonomia/${self:provider.stage}/knowledge/public-base, 'https://autonomia-knowledge-docs.s3.amazonaws.com'}
     EVS_PRODUCT_ID: ${ssm:/autonomia/saas/EVS_PRODUCT_ID, ''}
     EUVIAJO_CLIENT_API_TOKEN: ${ssm:/autonomia/saas/EUVIAJO_CLIENT_API_TOKEN, ''}
+    SMTP_HOST: ${ssm:/autonomia/${self:provider.stage}/smtp/host, ''}
+    SMTP_PORT: ${ssm:/autonomia/${self:provider.stage}/smtp/port, '465'}
+    SMTP_SECURE: ${ssm:/autonomia/${self:provider.stage}/smtp/secure, 'true'}
+    SMTP_USER: ${ssm:/autonomia/${self:provider.stage}/smtp/user, ''}
+    SMTP_PASS: ${ssm:/autonomia/${self:provider.stage}/smtp/pass, ''}
+    SMTP_FROM_EMAIL: ${ssm:/autonomia/${self:provider.stage}/smtp/from-email, ''}
+    SMTP_FROM_NAME: ${ssm:/autonomia/${self:provider.stage}/smtp/from-name, ''}
+    SMTP_REPLY_TO: ${ssm:/autonomia/${self:provider.stage}/smtp/reply-to, ''}
+    SMTP_TLS_REJECT_UNAUTHORIZED: ${ssm:/autonomia/${self:provider.stage}/smtp/tls-reject-unauthorized, 'true'}
     # Webhook-service (token e função de ingest). Resolvemos o token via SSM no deploy para evitar chamadas SSM em runtime dentro da VPC.
     WEBHOOK_APPLICATION_TOKEN: ${ssm:/webhook-service/${self:provider.stage}/application-token, ''}
     WEBHOOK_INGEST_FUNCTION: webhook-service-ingest-${self:provider.stage}-ingestWebhook
@@ -86,6 +95,7 @@ provider:
     # Invocação direta da Lambda do financial-service (evita HTTP; Lambdas em VPC sem NAT não alcançam API Gateway). Backend stage prod -> financial stage production.
     FINANCIAL_SERVICE_CREATE_SUBSCRIPTION_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-createAccountSubscription
     FINANCIAL_SERVICE_ASSOCIATE_ONBOARDING_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-associateOnboardingData
+    INTERNAL_INTEGRATION_TOKEN: ${ssm:/autonomia/${self:provider.stage}/integration/internal-token, ''}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -871,6 +881,91 @@ functions:
       - http:
           path: Autonomia/Saas/Inboxes/{inboxId}
           method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+          authorizer: ${self:custom.authorizer}
+
+  publicCreateWahaSession:
+    handler: handlers/public-create-waha-session.handler
+    # Rota pública chamada pelo portal-autonomia via link de conexão da inbox.
+    # Fica fora da VPC para poder chamar o API Gateway do WAHA.
+    vpc: null
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}/PublicCreateSession
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+
+  publicGetWahaConnectionState:
+    handler: handlers/public-get-waha-connection-state.handler
+    # Rota pública usada pela tela /inbox_connection/[token] para consultar estado da conexão via SaaS.
+    vpc: null
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}/PublicConnectionState
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+              querystrings:
+                token: true
+
+  publicSyncWhatsappEnvironment:
+    handler: handlers/public-sync-whatsapp-environment.handler
+    # Rota pública usada pela tela /inbox_connection/[token] para sincronizar ambiente WhatsApp via SaaS.
+    vpc: null
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}/PublicSyncWhatsappEnvironment
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+
+  generateInboxConnectionLink:
+    handler: handlers/generate-inbox-connection-link.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}/ConnectionLink
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                inboxId: true
+          authorizer: ${self:custom.authorizer}
+
+  getInboxConnectionToken:
+    handler: handlers/get-inbox-connection-token.handler
+    events:
+      - http:
+          path: Autonomia/Saas/InboxConnectionToken/{token}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                token: true
+
+  notifyInboxConnectionLink:
+    handler: handlers/notify-inbox-connection-link.handler
+    # Rota de notificação por e-mail precisa sair para SMTP externo, por isso roda fora da VPC.
+    vpc: null
+    events:
+      - http:
+          path: Autonomia/Saas/Inboxes/{inboxId}/NotifyConnectionLink
+          method: post
           cors: true
           request:
             parameters:
