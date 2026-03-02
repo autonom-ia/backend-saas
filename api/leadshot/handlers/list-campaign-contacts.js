@@ -8,6 +8,8 @@ const { withCors } = require('../utils/cors');
  */
 exports.handler = withCors(async (event, context) => {
   try {
+    console.log('[list-campaign-contacts] Evento recebido:', JSON.stringify(event));
+
     const campaignId = event.pathParameters?.campaignId;
     
     if (!campaignId) {
@@ -21,39 +23,23 @@ exports.handler = withCors(async (event, context) => {
     const queryParams = event.queryStringParameters || {};
     const { status, limit, offset } = queryParams;
 
-    // Extrair email do usuário autenticado via Cognito Authorizer
-    const claims = event?.requestContext?.authorizer?.claims || event?.requestContext?.authorizer?.jwt?.claims || {};
-    const email = claims.email || claims['cognito:username'] || null;
+    console.log('[list-campaign-contacts] Parâmetros de entrada', {
+      campaignId,
+      status,
+      limit,
+      offset,
+    });
 
-    if (!email) {
-      return errorResponse({ success: false, message: 'Não autenticado' }, 401, event);
-    }
-
-    // Buscar usuário no banco para obter id
+    // Buscar campanha apenas pelo ID (sem validação de contas do usuário)
     const knex = getDbConnection();
-    const user = await knex('users').where({ email }).first();
-
-    if (!user) {
-      return errorResponse({ success: false, message: 'Usuário não encontrado' }, 404, event);
-    }
-
-    // Verificar se o usuário tem acesso à campanha através das contas
-    const userAccounts = await knex('user_accounts')
-      .where({ user_id: user.id })
-      .pluck('account_id');
-
-    if (userAccounts.length === 0) {
-      return errorResponse({ 
-        success: false, 
-        message: 'Usuário não possui acesso a nenhuma conta' 
-      }, 403, event);
-    }
-
-    // Verificar se a campanha pertence a uma das contas do usuário
     const campaign = await knex('campaign')
       .where({ id: campaignId })
-      .whereIn('account_id', userAccounts)
       .first();
+
+    console.log('[list-campaign-contacts] Campanha encontrada?', {
+      campaignExists: Boolean(campaign),
+      campaignId,
+    });
 
     if (!campaign) {
       return errorResponse({ 
@@ -68,7 +54,14 @@ exports.handler = withCors(async (event, context) => {
     if (limit) filters.limit = limit;
     if (offset) filters.offset = offset;
 
+    console.log('[list-campaign-contacts] Filtros aplicados', filters);
+
     const result = await listCampaignContacts(campaignId, filters);
+
+    console.log('[list-campaign-contacts] Resultado da consulta', {
+      total: result?.total,
+      dataLength: Array.isArray(result?.data) ? result.data.length : null,
+    });
     
     return success({
       success: true,

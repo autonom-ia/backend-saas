@@ -244,13 +244,46 @@ const getProductAccountByTwoPhones = async (phone, accountPhone) => {
     }
 
     // 4. Buscar sessões do usuário pelo phone e account_id
-    console.log(`Buscando sessões com phone: ${phone} e account_id: ${accountId}`);
+    console.log(`Buscando sessões (match exato) com phone: ${phone} e account_id: ${accountId}`);
     userSessions = await db('user_session')
       .where('phone', phone)
       .where('account_id', accountId)
       .select('*');
 
-    // 4.1. Se não existir user_session, criar agora, garantindo contact_id
+    // 4.1. Se não encontrar por match exato, tentar match "4 + 8" dígitos
+    if (!userSessions || userSessions.length === 0) {
+      const digits = String(phone || '').replace(/\D/g, '');
+      if (digits.length >= 12) {
+        const prefix = digits.slice(0, 4);
+        const suffix = digits.slice(-8);
+
+        console.log(
+          'Nenhuma user_session com phone exato encontrada. Tentando match flexível 4+8 dígitos',
+          { accountId, phone, prefix, suffix },
+        );
+
+        const cleanedColumn = "regexp_replace(phone, '[^0-9]', '', 'g')";
+
+        userSessions = await db('user_session')
+          .where('account_id', accountId)
+          .andWhereRaw(
+            `substring(${cleanedColumn} from 1 for 4) = ? and right(${cleanedColumn}, 8) = ?`,
+            [prefix, suffix],
+          )
+          .select('*');
+
+        console.log('Resultado match flexível 4+8 dígitos para user_session:', {
+          found: Array.isArray(userSessions) ? userSessions.length : 0,
+        });
+      } else {
+        console.log(
+          'Telefone não possui dígitos suficientes para match flexível 4+8; pulando segunda busca',
+          { phone, digits },
+        );
+      }
+    }
+
+    // 4.2. Se ainda assim não existir user_session, criar agora, garantindo contact_id
     if (!userSessions || userSessions.length === 0) {
       console.log('Nenhuma user_session encontrada. Criando nova sessão...');
 

@@ -301,6 +301,10 @@ const sendCampaignMessages = async (campaignId, filters = {}) => {
     throw new Error('Campanha não encontrada');
   }
 
+  const account = await knex('account')
+    .where({ id: campaign.account_id })
+    .first();
+
   // Buscar contatos para envio
   let query = knex('contact')
     .where({ campaign_id: campaignId });
@@ -347,7 +351,21 @@ const sendCampaignMessages = async (campaignId, filters = {}) => {
         ? JSON.parse(contact.contact_data) 
         : contact.contact_data
     })),
-    account_id: campaign.account_id
+    account_id: campaign.account_id,
+    account: account
+      ? {
+          id: account.id,
+          social_name: account.social_name,
+          name: account.name,
+          email: account.email,
+          phone: account.phone,
+          product_id: account.product_id,
+          document: account.document,
+          instance: account.instance,
+          conversation_funnel_id: account.conversation_funnel_id,
+          domain: account.domain,
+        }
+      : null,
   };
 
   // Enviar para n8n
