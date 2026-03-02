@@ -127,6 +127,20 @@ const createUserSession = async (sessionData) => {
       account_id: sessionData.account_id,
     });
 
+    // Se um contact_id foi enviado explicitamente, atualizar o status desse contato para 'sent'
+    if (sessionData.contact_id && contactIdForNewSession) {
+      try {
+        await db('contact')
+          .where({ id: contactIdForNewSession })
+          .update({ external_status: 'delivered', updated_at: db.fn.now() });
+      } catch (updateError) {
+        console.error('[createUserSession] Erro ao atualizar status do contato para sent', {
+          contactId: contactIdForNewSession,
+          error: updateError,
+        });
+      }
+    }
+
     const newSession = {
       name: sessionData.name,
       phone: sessionData.phone,
