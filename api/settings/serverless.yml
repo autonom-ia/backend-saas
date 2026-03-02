@@ -211,6 +211,16 @@ functions:
           path: Autonomia/Settings/UserSessionAgentMessages
           method: post
           cors: true
+
+  updateContactStatusIntegration:
+    handler: handlers/update-contact-status-integration.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/UpdateContactStatusIntegration
+          method: post
+          cors: true
   
 package:
   individually: true

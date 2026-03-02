@@ -169,9 +169,18 @@ const saveContacts = async (contacts, campaignId, accountId) => {
 
   for (const contactData of contacts) {
     try {
+      // Normalizar telefone para armazenamento e verificação de duplicidade
+      const rawPhone = contactData.contact.phone || '';
+      let normalizedPhone = rawPhone.replace(/\D/g, '');
+
+      if (normalizedPhone && !normalizedPhone.startsWith('55')) {
+        normalizedPhone = `55${normalizedPhone}`;
+      }
+
+      // Verificar se já existe contato com mesmo telefone na campanha
       // Verificar se já existe contato com mesmo telefone na campanha
       const existingContact = await knex('contact')
-        .where({ campaign_id: campaignId, phone: contactData.contact.phone })
+        .where({ campaign_id: campaignId, phone: normalizedPhone })
         .first();
 
       if (existingContact) {
@@ -190,7 +199,7 @@ const saveContacts = async (contacts, campaignId, accountId) => {
       // Inserir contato
       await knex('contact').insert({
         name: contactData.contact.name,
-        phone: contactData.contact.phone,
+        phone: normalizedPhone,
         contact_data: JSON.stringify(contactData.contact.contact_data),
         campaign_id: campaignId,
         account_id: accountId,
