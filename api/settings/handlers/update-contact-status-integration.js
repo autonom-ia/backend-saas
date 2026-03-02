@@ -1,6 +1,6 @@
 const { success, error } = require('../utils/response');
 const { getDbConnection, closeDbConnection } = require('../utils/database');
-const { requireInternalToken } = require('../../utils/internal-auth');
+const { requireInternalToken } = require('../utils/internal-auth');
 
 /**
  * Handler para atualizar o status (external_status) de um contato via token de integração
