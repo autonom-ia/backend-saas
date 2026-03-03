@@ -136,6 +136,19 @@ functions:
           path: Autonomia/Waha/Internal/ConnectionState
           method: options
           cors: true
+  internalSyncWhatsappEnvironment:
+    handler: handlers/internal-sync-whatsapp-environment.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/Internal/SyncWhatsappEnvironment
+          method: post
+          cors: true
+      - http:
+          path: Autonomia/Waha/Internal/SyncWhatsappEnvironment
+          method: options
+          cors: true
   syncWhatsappEnvironment:
     handler: handlers/sync-whatsapp-environment.handler
     layers:

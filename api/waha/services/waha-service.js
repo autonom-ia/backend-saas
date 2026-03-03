@@ -465,45 +465,6 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
   let chatwootInboxId;
   let inboxResp;
 
-  // 0) Se já existir uma inbox no Chatwoot com o mesmo nome, reaproveita ela
-  try {
-    const { data: listResp } = await cwAccount.get(
-      `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes`,
-    );
-
-    const items = Array.isArray(listResp?.data)
-      ? listResp.data
-      : Array.isArray(listResp)
-      ? listResp
-      : [];
-
-    const inboxByName = items.find((item) => {
-      const itemName = item?.name || item?.data?.name || '';
-      return String(itemName).trim().toLowerCase() === inboxName.toLowerCase();
-    });
-
-    if (inboxByName && (inboxByName.id || inboxByName.data?.id)) {
-      chatwootInboxId = inboxByName.id || inboxByName.data?.id;
-      inboxResp = inboxByName;
-      existingInboxParam = String(chatwootInboxId);
-
-      console.log('[Waha.syncWhatsappEnvironment] Reusing Chatwoot inbox found by name', {
-        accountId,
-        inboxId,
-        chatwootAccountId,
-        chatwootInboxId,
-        inboxName,
-      });
-    }
-  } catch (listErr) {
-    console.warn('[Waha.syncWhatsappEnvironment] Failed to list Chatwoot inboxes by name; will fallback to parameter/create flow', {
-      accountId,
-      inboxId,
-      chatwootAccountId,
-      message: listErr && listErr.message,
-    });
-  }
-
   try {
     // Garantir feature_flags configurado corretamente na account do Chatwoot antes de manipular inbox/Agent Bot
     let chatwootDb;
@@ -518,6 +479,117 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
         chatwootAccountId,
       ]);
       console.log('[Waha.syncWhatsappEnvironment] feature_flags atualizado com sucesso');
+
+      // 0) Se já existir uma inbox no Chatwoot com o mesmo nome, reaproveita ela via API
+      if (!chatwootInboxId) {
+        try {
+          const { data: listResp } = await cwAccount.get(
+            `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes`,
+          );
+
+          const items = Array.isArray(listResp?.data)
+            ? listResp.data
+            : Array.isArray(listResp)
+            ? listResp
+            : [];
+
+          const inboxByName = items.find((item) => {
+            const itemName = item?.name || item?.data?.name || '';
+            return String(itemName).trim().toLowerCase() === inboxName.toLowerCase();
+          });
+
+          if (inboxByName && (inboxByName.id || inboxByName.data?.id)) {
+            chatwootInboxId = inboxByName.id || inboxByName.data?.id;
+            inboxResp = inboxByName;
+            existingInboxParam = String(chatwootInboxId);
+
+            console.log('[Waha.syncWhatsappEnvironment] Reusing Chatwoot inbox found by name', {
+              accountId,
+              inboxId,
+              chatwootAccountId,
+              chatwootInboxId,
+              inboxName,
+            });
+          }
+        } catch (listErr) {
+          console.warn('[Waha.syncWhatsappEnvironment] Failed to list Chatwoot inboxes by name; will fallback to DB/webhook/parameter/create flow', {
+            accountId,
+            inboxId,
+            chatwootAccountId,
+            message: listErr && listErr.message,
+          });
+        }
+      }
+
+      // 0.1) Se não encontrou por nome na API, tentar localizar pelo webhook diretamente no banco
+      if (!chatwootInboxId) {
+        const instanceName = inboxName;
+
+        try {
+          const likePattern = `%${String(instanceName).trim()}%`;
+
+          const channelRow = await chatwootDb('channel_api')
+            .select('id', 'account_id', 'webhook_url')
+            .where('account_id', Number(chatwootAccountId))
+            .andWhere('webhook_url', 'like', likePattern)
+            .first();
+
+          console.log('[Waha.syncWhatsappEnvironment] Resultado de busca em channel_api por webhook', {
+            accountId,
+            chatwootAccountId,
+            instanceName,
+            found: !!channelRow,
+            channelId: channelRow?.id,
+            webhookUrl: channelRow?.webhook_url,
+          });
+
+          if (channelRow && channelRow.id) {
+            const inboxRow = await chatwootDb('inboxes')
+              .select('id', 'name', 'channel_id', 'account_id')
+              .where({
+                account_id: Number(chatwootAccountId),
+                channel_id: channelRow.id,
+              })
+              .first();
+
+            console.log('[Waha.syncWhatsappEnvironment] Resultado de busca em inboxes por channel_id', {
+              accountId,
+              chatwootAccountId,
+              instanceName,
+              channelId: channelRow.id,
+              found: !!inboxRow,
+              inboxId: inboxRow?.id,
+              inboxName: inboxRow?.name,
+            });
+
+            if (inboxRow && inboxRow.id) {
+              chatwootInboxId = inboxRow.id;
+              existingInboxParam = String(chatwootInboxId);
+              inboxResp = {
+                id: inboxRow.id,
+                name: inboxRow.name,
+                channel_id: inboxRow.channel_id,
+                account_id: inboxRow.account_id,
+              };
+
+              console.log('[Waha.syncWhatsappEnvironment] Reusing Chatwoot inbox found via DB/channel_api webhook', {
+                accountId,
+                inboxId,
+                chatwootAccountId,
+                chatwootInboxId,
+                instanceName,
+              });
+            }
+          }
+        } catch (dbLookupErr) {
+          console.warn('[Waha.syncWhatsappEnvironment] Falha ao buscar inbox via channel_api/inboxes por webhook', {
+            accountId,
+            chatwootAccountId,
+            inboxId,
+            error: dbLookupErr?.message || dbLookupErr,
+          });
+        }
+      }
     } catch (ffErr) {
       console.warn('[Waha.syncWhatsappEnvironment] Não foi possível atualizar feature_flags', {
         accountId,
@@ -564,8 +636,9 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
           webhook_url: webhookUrl,
         };
 
+        // Ao reutilizar uma inbox existente, não devemos alterar o nome dela.
+        // Apenas atualizamos o webhook e demais campos do channel, preservando o name atual.
         const updateBody = {
-          name: inboxName,
           timezone: 'America/Sao_Paulo',
           channel: updatedChannel,
         };
