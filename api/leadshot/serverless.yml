@@ -169,6 +169,21 @@ functions:
               querystrings:
                 productId: true
           authorizer: ${self:custom.authorizer}
+
+  getCampaignAnalytics:
+    handler: handlers/get-campaign-analytics.handler
+    events:
+      - http:
+          path: Autonomia/Leadshot/Campaigns/Analytics
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: false
+                campaignId: false
+                templateMessageId: false
+          authorizer: ${self:custom.authorizer}
   createCampaign:
     handler: handlers/create-campaign.handler
     events:
