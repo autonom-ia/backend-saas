@@ -381,8 +381,6 @@ async function toggleConversationStatus(chatwootAccountId, systemAccountId, conv
   }
 }
 
-// ...
-
 async function assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, assigneeId, chatwootDb) {
   console.log(`Atribuindo conversa ${conversationId} ao agente ${assigneeId}`);
   try {
@@ -528,21 +526,10 @@ const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactI
     await registerAssignment(inboxId, selectedAgentId, contactId);
     console.log(`Conversa ${conversationId} atribuída com sucesso ao agente ${selectedAgentId}`);
 
-    // 6. Atribuir conversas adicionais
-    const multipleAssignmentResult = await assignMultipleConversations(
-      chatwootAccountId,
-      systemAccountId,
-      inboxId,
-      selectedAgentId,
-      autoAssignmentConfig.auto_assignment_config,
-      chatwootDb
-    );
-
     return {
       status: 'success',
       assignedAgentId: selectedAgentId,
       assignedConversationId: conversationId,
-      additionalAssignments: multipleAssignmentResult
     };
 
   } catch (error) {
@@ -558,7 +545,6 @@ const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactI
 
 module.exports = {
   assignContactToAgent,
-  assignMultipleConversations,
   getOnlineAgents,
   getLoggedUsersDetails
 };
