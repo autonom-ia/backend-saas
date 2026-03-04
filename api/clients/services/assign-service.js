@@ -20,8 +20,7 @@ const clientsDb = knex({
   pool: { min: 0, max: 5 }
 });
 
-// Fallback padrão quando não há agente disponível
-const DEFAULT_ASSIGNEE_ID = 1;
+// Não utilizar mais usuário admin (id=1) como fallback de atribuição
 
 /**
  * Cria conexão com banco de dados do Chatwoot usando account_id
@@ -80,6 +79,28 @@ async function shouldAssignOnlyActiveUsers(systemAccountId) {
     console.error('Erro ao ler parâmetro assign_only_active_users:', error);
     return true;
   }
+}
+
+async function getChatwootApiConfig(systemAccountId) {
+  const db = getDbConnection();
+  const params = await db('account_parameter')
+    .select('name', 'value')
+    .where({ account_id: systemAccountId })
+    .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
+    .then(rows => {
+      const config = {};
+      rows.forEach(r => { config[r.name] = r.value; });
+      return config;
+    });
+
+  if (!params['chatwoot-url'] || !params['chatwoot-token']) {
+    throw new Error(`Parâmetros 'chatwoot-url' ou 'chatwoot-token' não encontrados para account_id=${systemAccountId}`);
+  }
+
+  const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
+  const apiToken = params['chatwoot-token'];
+
+  return { baseUrl, apiToken };
 }
 
 /**
@@ -180,36 +201,71 @@ async function getAvailableAgentsForInbox(chatwootDb, inboxId) {
 }
 
 /**
- * Obtém a lista de agentes online do Chatwoot
+ * Obtém a lista de agentes disponíveis considerando inbox, atividade, time e regra de ignorar admin.
+ * @param {knex} chatwootDb - Conexão com o banco de dados do Chatwoot
  * @param {number} chatwootAccountId - ID da conta do Chatwoot
  * @param {number} systemAccountId - ID da conta no sistema
- * @returns {Promise<number[]>} - Array de IDs dos agentes online
+ * @param {number} inboxId - ID da caixa de entrada
+ * @param {number|null} chatwootTeamId - ID do time do Chatwoot (quando houver)
+ * @returns {Promise<number[]>} - IDs dos agentes disponíveis
  */
+async function getAvailableAgentIds(chatwootDb, chatwootAccountId, systemAccountId, inboxId, chatwootTeamId) {
+  const activeOnly = await shouldAssignOnlyActiveUsers(systemAccountId);
+  let availableAgentIds;
+
+  if (activeOnly) {
+    const inboxAgentIds = await getAvailableAgentsForInbox(chatwootDb, inboxId);
+    const onlineAgentIds = await getOnlineAgents(chatwootAccountId, systemAccountId);
+    let candidateIds = inboxAgentIds.filter((id) => onlineAgentIds.includes(id));
+
+    // Se houver time definido no step, filtra apenas agentes desse time
+    if (chatwootTeamId) {
+      const teamMembers = await chatwootDb('team_members')
+        .select('user_id')
+        .where('team_id', chatwootTeamId);
+      const teamUserIds = teamMembers.map((m) => m.user_id);
+      candidateIds = candidateIds.filter((id) => teamUserIds.includes(id));
+      console.log(`Filtrando agentes pelo time ${chatwootTeamId}. Restaram ${candidateIds.length} agentes elegíveis.`);
+    }
+
+    // Garante que o usuário admin (id=1) nunca seja elegível
+    availableAgentIds = candidateIds.filter((id) => id !== 1);
+  } else {
+    // Quando assign_only_active_users = FALSE, considerar todos os usuários da tabela users
+    let allUsers = await chatwootDb('users').select('id');
+    allUsers = allUsers.filter((u) => u.id !== 1);
+
+    if (chatwootTeamId) {
+      const teamMembers = await chatwootDb('team_members')
+        .select('user_id')
+        .where('team_id', chatwootTeamId);
+      const teamUserIds = teamMembers.map((m) => m.user_id);
+      availableAgentIds = allUsers.map((u) => u.id).filter((id) => teamUserIds.includes(id));
+      console.log(`assign_only_active_users=FALSE com time ${chatwootTeamId} -> usando apenas usuários do time (${availableAgentIds.length})`);
+    } else {
+      availableAgentIds = allUsers.map((u) => u.id);
+      console.log(`assign_only_active_users=FALSE -> usando todos os usuários da tabela users (${availableAgentIds.length})`);
+    }
+  }
+
+  if (!availableAgentIds || availableAgentIds.length === 0) {
+    console.log('Nenhum agente disponível para esta caixa de entrada (considerando filtros de time/atividade). Nenhuma atribuição será realizada.');
+    return [];
+  }
+
+  return availableAgentIds;
+}
+
+// ...
+
 async function getOnlineAgents(chatwootAccountId, systemAccountId) {
   console.log(`Obtendo agentes online para a conta Chatwoot: ${chatwootAccountId}`);
-  
   try {
     // Buscar URL e token do Chatwoot
-    const db = getDbConnection();
-    const params = await db('account_parameter')
-      .select('name', 'value')
-      .where({ account_id: systemAccountId })
-      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
-      .then(rows => {
-        const config = {};
-        rows.forEach(r => { config[r.name] = r.value; });
-        return config;
-      });
-    
-    if (!params['chatwoot-url'] || !params['chatwoot-token']) {
-      throw new Error(`Parâmetros 'chatwoot-url' ou 'chatwoot-token' não encontrados para account_id=${systemAccountId}`);
-    }
-    
-    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
-    const apiToken = params['chatwoot-token'];
-    
+    const { baseUrl, apiToken } = await getChatwootApiConfig(systemAccountId);
+
     console.log(`Chamando API: ${baseUrl}/api/v1/accounts/${chatwootAccountId}/agents`);
-    
+
     const response = await axios.get(
       `${baseUrl}/api/v1/accounts/${chatwootAccountId}/agents`,
       {
@@ -218,142 +274,34 @@ async function getOnlineAgents(chatwootAccountId, systemAccountId) {
         }
       }
     );
-    
+
     // Log da estrutura da resposta para debug
     console.log(`Estrutura da resposta da API: ${JSON.stringify(response.data).substring(0, 200)}...`);
-    
+
     // Verificar se os dados existem e ajustar a estrutura corretamente
     let onlineAgents = [];
     if (response.data) {
       // Se payload não existe, usa o data diretamente (pode ser um array)
-      const agentsData = Array.isArray(response.data) ? response.data : 
+      const agentsData = Array.isArray(response.data) ? response.data :
                         (response.data.payload || response.data.agents || response.data.data || []);
-      
+
       // Filtra os agentes que estão online
       onlineAgents = agentsData
         .filter(agent => agent && agent.availability_status === 'online')
         .map(agent => agent.id);
     }
-    
+
     console.log(`Agentes online: ${onlineAgents.length > 0 ? onlineAgents.join(', ') : 'nenhum'} (total: ${onlineAgents.length})`);
-    return onlineAgents;
+    // Garante que o usuário admin (id=1) nunca seja considerado como agente elegível
+    return onlineAgents.filter((id) => id !== 1);
   } catch (error) {
     console.error('Erro ao obter agentes online:', error);
     throw new Error(`Erro ao obter agentes online: ${error.message}`);
   }
 }
 
-/**
- * Obtém o agente que deve receber o próximo contato
- * @param {Array<number>} availableAgentIds - IDs dos agentes disponíveis
- * @param {number} inboxId - ID da caixa de entrada
- * @param {object} autoAssignmentConfig - Configuração de atribuição automática
- * @param {knex} chatwootDb - Conexão com o banco de dados Chatwoot
- * @returns {Promise<number|null>} - ID do agente selecionado ou null se não houver nenhum
- */
-async function getNextAgent(availableAgentIds, inboxId, autoAssignmentConfig, chatwootDb) {
-  if (!availableAgentIds || availableAgentIds.length === 0) {
-    console.log('Nenhum agente disponível para atribuição');
-    return null;
-  }
-  
-  console.log(`Procurando próximo agente entre ${availableAgentIds.length} agentes disponíveis`);
-  const maxAssignmentLimit = parseInt(autoAssignmentConfig?.max_assignment_limit || '7', 10);
-  console.log(`Limite máximo de atendimentos por agente: ${maxAssignmentLimit}`);
-  
-  try {
-    // 1. Encontrar agentes que já estão na tabela de atribuições para esta caixa de entrada
-    const agentsWithAssignments = await clientsDb('empresta_assigned_contacts_register')
-      .select('user_id')
-      .distinct()
-      .whereIn('user_id', availableAgentIds)
-      .andWhere('inbox_id', inboxId);
-    
-    const agentsWithAssignmentsIds = agentsWithAssignments.map(a => a.user_id);
-    console.log(`Agentes com atribuições registradas: ${agentsWithAssignmentsIds.length > 0 ? agentsWithAssignmentsIds.join(', ') : 'nenhum'}`);
-    
-    // 2. Filtrar para encontrar agentes sem atribuições (que não estão na tabela)
-    const agentsWithoutAssignments = availableAgentIds.filter(id => !agentsWithAssignmentsIds.includes(id));
-    console.log(`Agentes sem atribuições: ${agentsWithoutAssignments.length > 0 ? agentsWithoutAssignments.join(', ') : 'nenhum'}`);
-    
-    // 3. Se houver algum agente sem atribuições, usar o primeiro
-    if (agentsWithoutAssignments.length > 0) {
-      const selectedAgentId = agentsWithoutAssignments[0];
-      console.log(`Selecionado agente sem atribuições anteriores: ${selectedAgentId}`);
-      return selectedAgentId;
-    }
-    
-    console.log('Todos os agentes já possuem atribuições, verificando limites de atendimentos em aberto');
-    
-    // 4. Verificar quais agentes estão abaixo do limite máximo de atendimentos em aberto
-    const agentsWithOpenConversationCounts = await chatwootDb('conversations as c')
-      .select('c.assignee_id')
-      .count('c.id as open_count')
-      .whereIn('c.assignee_id', availableAgentIds)
-      .where('c.status', 0) // status 0 significa conversa em aberto no Chatwoot
-      .groupBy('c.assignee_id');
-    
-    // Converter resultado para um mapa de contagens
-    const agentOpenCountMap = {};
-    agentsWithOpenConversationCounts.forEach(item => {
-      agentOpenCountMap[item.assignee_id] = parseInt(item.open_count, 10);
-    });
-    
-    console.log('Contagem de atendimentos em aberto por agente:', agentOpenCountMap);
-    
-    // Filtrar apenas agentes que estão abaixo do limite
-    const agentsBelowLimit = availableAgentIds.filter(agentId => {
-      const count = agentOpenCountMap[agentId] || 0;
-      return count < maxAssignmentLimit;
-    });
-    
-    console.log(`Agentes abaixo do limite de ${maxAssignmentLimit} atendimentos: ${agentsBelowLimit.length > 0 ? agentsBelowLimit.join(', ') : 'nenhum'}`);
-    
-    // Se houver agentes abaixo do limite, continuar com eles. Senão, usar todos os disponíveis
-    const eligibleAgentIds = agentsBelowLimit;
-    if (agentsBelowLimit.length === 0) {
-      console.log('Nenhum agente disponível abaixo do limite de atendimentos');
-      return null;
-    }
+// ...
 
-    // 5. Selecionar o agente com a atribuição mais antiga entre os que estão abaixo do limite
-    const agentWithOldestAssignment = await clientsDb('empresta_assigned_contacts_register as eacr')
-      .select('eacr.user_id')
-      .whereIn('eacr.user_id', eligibleAgentIds)
-      .andWhere('eacr.inbox_id', inboxId)
-      .groupBy('eacr.user_id')
-      .orderByRaw('MAX(eacr.assign_time) ASC')
-      .first();
-    
-    if (agentWithOldestAssignment) {
-      console.log(`Agente com atribuição mais antiga: ${agentWithOldestAssignment.user_id}`);
-      return agentWithOldestAssignment.user_id;
-    }
-    
-    // 6. Se ainda não encontrou ninguém, pega o primeiro da lista
-    console.log(`Nenhum agente encontrado no histórico, usando o primeiro disponível: ${eligibleAgentIds[0]}`);
-    return eligibleAgentIds[0];
-  } catch (error) {
-    console.error('Erro ao selecionar próximo agente:', error);
-    // Em caso de erro, seleciona o primeiro da lista
-    return availableAgentIds[0];
-  }
-}
-
-/**
- * Atribui a conversa ao agente no Chatwoot
- * @param {number} accountId - ID da conta do Chatwoot
- * @param {number} conversationId - ID da conversa
- * @param {number} assigneeId - ID do agente
- * @returns {Promise<object>} - Resposta da API do Chatwoot
- */
-/**
- * Adiciona o gerente do agente como participante da conversa
- * @param {number} accountId - ID da conta
- * @param {number} conversationId - ID da conversa (display_id)
- * @param {number} assigneeId - ID do agente atribuído
- * @param {knex} chatwootDb - Conexão com o banco de dados do Chatwoot
- */
 async function addManagerAsParticipant(chatwootAccountId, systemAccountId, conversationId, assigneeId, chatwootDb) {
   console.log(`Adicionando gerente como participante da conversa ${conversationId} para o agente ${assigneeId}`);
   try {
@@ -386,19 +334,7 @@ async function addManagerAsParticipant(chatwootAccountId, systemAccountId, conve
     console.log(`Gerente encontrado: ${managerId} para o time ${team_id}`);
 
     // 3. Buscar configurações da API
-    const db = getDbConnection();
-    const params = await db('account_parameter')
-      .select('name', 'value')
-      .where({ account_id: systemAccountId })
-      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
-      .then(rows => {
-        const config = {};
-        rows.forEach(r => { config[r.name] = r.value; });
-        return config;
-      });
-    
-    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
-    const apiToken = params['chatwoot-token'];
+    const { baseUrl, apiToken } = await getChatwootApiConfig(systemAccountId);
 
     // 4. Chamar a API para adicionar o agente e o gerente como participantes
     const participants = [assigneeId, managerId];
@@ -420,30 +356,14 @@ async function addManagerAsParticipant(chatwootAccountId, systemAccountId, conve
   }
 }
 
-/**
- * Altera o status da conversa no Chatwoot (ex: para 'open')
- * @param {number} accountId - ID da conta
- * @param {number} conversationId - ID da conversa
- * @param {string} status - Novo status ('open', 'snoozed', etc.)
- */
+// ...
+
 async function toggleConversationStatus(chatwootAccountId, systemAccountId, conversationId, status = 'open') {
   console.log(`Alterando status da conversa ${conversationId} para '${status}'`);
   try {
     // Buscar configurações da API
-    const db = getDbConnection();
-    const params = await db('account_parameter')
-      .select('name', 'value')
-      .where({ account_id: systemAccountId })
-      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
-      .then(rows => {
-        const config = {};
-        rows.forEach(r => { config[r.name] = r.value; });
-        return config;
-      });
-    
-    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
-    const apiToken = params['chatwoot-token'];
-    
+    const { baseUrl, apiToken } = await getChatwootApiConfig(systemAccountId);
+
     await axios.post(
       `${baseUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${conversationId}/toggle_status`,
       { status }, // Payload para definir o status
@@ -461,25 +381,14 @@ async function toggleConversationStatus(chatwootAccountId, systemAccountId, conv
   }
 }
 
+// ...
+
 async function assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, assigneeId, chatwootDb) {
   console.log(`Atribuindo conversa ${conversationId} ao agente ${assigneeId}`);
-  
   try {
     // Buscar configurações da API
-    const db = getDbConnection();
-    const params = await db('account_parameter')
-      .select('name', 'value')
-      .where({ account_id: systemAccountId })
-      .whereIn('name', ['chatwoot-url', 'chatwoot-token'])
-      .then(rows => {
-        const config = {};
-        rows.forEach(r => { config[r.name] = r.value; });
-        return config;
-      });
-    
-    const baseUrl = params['chatwoot-url'].replace(/\/$/, '');
-    const apiToken = params['chatwoot-token'];
-    
+    const { baseUrl, apiToken } = await getChatwootApiConfig(systemAccountId);
+
     const response = await axios.post(
       `${baseUrl}/api/v1/accounts/${chatwootAccountId}/conversations/${conversationId}/assignments`,
       { assignee_id: assigneeId },
@@ -490,7 +399,7 @@ async function assignConversationToAgent(chatwootAccountId, systemAccountId, con
         }
       }
     );
-    
+
     console.log('Atribuição realizada com sucesso:', response.data);
 
     // Altera o status da conversa para 'aberta' para que apareça corretamente para o agente
@@ -507,142 +416,16 @@ async function assignConversationToAgent(chatwootAccountId, systemAccountId, con
 }
 
 /**
- * Atribui múltiplas conversas não atribuídas ao mesmo agente até atingir o limite
- * @param {number} accountId - ID da conta do Chatwoot
- * @param {number} inboxId - ID da caixa de entrada
- * @param {number} agentId - ID do agente selecionado
- * @param {object} autoAssignmentConfig - Configuração de limite de atendimentos
- * @param {knex} chatwootDb - Conexão com o banco de dados do Chatwoot
- * @returns {Promise<object>} - Resultado da atribuição múltipla
- */
-async function assignMultipleConversations(chatwootAccountId, systemAccountId, inboxId, agentId, autoAssignmentConfig, chatwootDb) {
-  console.log(`Verificando atribuição de múltiplas conversas para o agente ${agentId}`);
-  
-  try {
-    // 1. Verificar quantas conversas o agente já possui atualmente
-    const currentAssignments = await chatwootDb('conversations')
-      .where({
-        assignee_id: agentId,
-        status: 0 // conversas abertas
-      })
-      .count('id as count')
-      .first();
-    
-    const currentCount = parseInt(currentAssignments?.count || '0', 10);
-    const maxAssignmentLimit = parseInt(autoAssignmentConfig?.max_assignment_limit || '7', 10);
-    const remainingSlots = Math.max(0, maxAssignmentLimit - currentCount);
-    
-    console.log(`Agente ${agentId} tem ${currentCount}/${maxAssignmentLimit} conversas em aberto (restam ${remainingSlots} vagas)`);
-    
-    if (remainingSlots <= 0) {
-      console.log(`Agente ${agentId} já atingiu ou excedeu o limite de ${maxAssignmentLimit} atendimentos`);  
-      return { 
-        status: 'skipped',
-        reason: 'agent_at_capacity',
-        assignedCount: 0
-      };
-    }
-    
-    // 2. Buscar conversas não atribuídas OU atribuídas ao usuário de fallback (1) para redistribuir ao agente (priorizando mais antigas)
-    const unassignedConversations = await chatwootDb('conversations')
-      .select('id', 'display_id', 'contact_id')
-      .where({
-        inbox_id: inboxId,
-        status: 0 // conversa aberta
-      })
-      .andWhere((qb) => {
-        qb.whereNull('assignee_id').orWhere('assignee_id', DEFAULT_ASSIGNEE_ID);
-      })
-      .orderBy('created_at', 'asc')
-      .limit(remainingSlots);
-    
-    console.log(`Encontradas ${unassignedConversations.length} conversas não atribuídas (ordenadas por mais antigas primeiro)`); 
-    
-    if (unassignedConversations.length === 0) {
-      return { 
-        status: 'success',
-        reason: 'no_unassigned_conversations',
-        assignedCount: 0
-      };
-    }
-    
-    // 3. Atribuir cada conversa ao agente
-    const results = [];
-    for (const conversation of unassignedConversations) {
-      try {
-        // Atribuir conversa
-        await assignConversationToAgent(chatwootAccountId, systemAccountId, conversation.display_id, agentId, chatwootDb);
-        
-        // Registrar atribuição no histórico
-        await registerAssignment(inboxId, agentId, conversation.contact_id);
-        
-        results.push({
-          conversationId: conversation.id,
-          contactId: conversation.contact_id,
-          status: 'success'
-        });
-      } catch (error) {
-        console.error(`Erro ao atribuir conversa ${conversation.id}:`, error.message);
-        results.push({
-          conversationId: conversation.id,
-          contactId: conversation.contact_id,
-          status: 'error',
-          error: error.message
-        });
-      }
-    }
-    
-    const successCount = results.filter(r => r.status === 'success').length;
-    console.log(`Atribuídas com sucesso ${successCount} conversas adicionais ao agente ${agentId}`);
-    
-    return {
-      status: 'success',
-      assignedCount: successCount,
-      totalAttempted: unassignedConversations.length,
-      details: results
-    };
-    
-  } catch (error) {
-    console.error('Erro ao atribuir múltiplas conversas:', error);
-    return {
-      status: 'error',
-      reason: `erro_ao_atribuir_multiplas: ${error.message}`,
-      assignedCount: 0
-    };
-  }
-}
-
-/**
- * Registra a atribuição do contato na tabela de histórico
- * @param {number} inboxId - ID da caixa de entrada
- * @param {number} userId - ID do usuário
- * @param {number} contactId - ID do contato
- * @returns {Promise<object>} - Registro criado
- */
-async function registerAssignment(inboxId, userId, contactId) {
-  console.log(`Registrando atribuição: inbox=${inboxId}, user=${userId}, contact=${contactId}`);
-  
-  const [id] = await clientsDb('empresta_assigned_contacts_register')
-    .insert({
-      inbox_id: inboxId,
-      user_id: userId,
-      contact_id: contactId
-    })
-    .returning('id');
-  
-  return { id };
-}
-
-/**
  * Função principal para atribuir contato a um agente
- * @param {number} accountId - ID da conta do Chatwoot
+ * @param {number} chatwootAccountId - ID da conta do Chatwoot
+ * @param {number} systemAccountId - ID da conta no sistema
  * @param {number} contactId - ID do contato
  * @param {number} inboxId - ID da caixa de entrada
  * @param {number} conversationId - ID da conversa
+ * @param {number|null} chatwootTeamId - ID do time do Chatwoot (quando houver)
  * @returns {Promise<object>} - Resultado da atribuição
  */
-
-const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactId, inboxId, conversationId) => {
+const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactId, inboxId, conversationId, chatwootTeamId) => {
   console.log(`Iniciando processo de atribuição para conta Chatwoot ${chatwootAccountId} (system account ${systemAccountId}), conversa ${conversationId}`);
 
   let chatwootDb = null;
@@ -719,35 +502,25 @@ const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactI
       };
     }
 
-    // 3. Obter agentes disponíveis considerando configuração assign_only_active_users
-    const activeOnly = await shouldAssignOnlyActiveUsers(systemAccountId);
-    let availableAgentIds;
-    if (activeOnly) {
-      const inboxAgentIds = await getAvailableAgentsForInbox(chatwootDb, inboxId);
-      const onlineAgentIds = await getOnlineAgents(chatwootAccountId, systemAccountId);
-      availableAgentIds = inboxAgentIds.filter(id => onlineAgentIds.includes(id));
-    } else {
-      // Quando assign_only_active_users = FALSE, considerar todos os usuários da tabela users
-      const allUsers = await chatwootDb('users').select('id');
-      availableAgentIds = allUsers.map(u => u.id);
-      console.log(`assign_only_active_users=FALSE -> usando todos os usuários da tabela users (${availableAgentIds.length})`);
-    }
+    // 3. Obter agentes disponíveis considerando configuração assign_only_active_users e time (quando houver)
+    const availableAgentIds = await getAvailableAgentIds(
+      chatwootDb,
+      chatwootAccountId,
+      systemAccountId,
+      inboxId,
+      chatwootTeamId
+    );
 
-    if (availableAgentIds.length === 0) {
-      console.log('Nenhum agente online disponível para esta caixa de entrada. Atribuindo para o usuário padrão (1).');
-      await assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, DEFAULT_ASSIGNEE_ID, chatwootDb);
-      await registerAssignment(inboxId, DEFAULT_ASSIGNEE_ID, contactId);
-      return { status: 'assigned_to_default', assigneeId: DEFAULT_ASSIGNEE_ID, reason: 'no_available_agents' };
+    if (!availableAgentIds || availableAgentIds.length === 0) {
+      return { status: 'skipped', reason: 'no_available_agents' };
     }
 
     // 4. Determinar o próximo agente
     const selectedAgentId = await getNextAgent(availableAgentIds, inboxId, autoAssignmentConfig.auto_assignment_config, chatwootDb);
 
     if (!selectedAgentId) {
-      console.log('Todos os agentes disponíveis atingiram o limite. Atribuindo para o usuário padrão (1).');
-      await assignConversationToAgent(chatwootAccountId, systemAccountId, conversationId, DEFAULT_ASSIGNEE_ID, chatwootDb);
-      await registerAssignment(inboxId, DEFAULT_ASSIGNEE_ID, contactId);
-      return { status: 'assigned_to_default', assigneeId: DEFAULT_ASSIGNEE_ID, reason: 'agents_at_capacity' };
+      console.log('Todos os agentes disponíveis atingiram o limite de atendimentos. Nenhuma atribuição será realizada.');
+      return { status: 'skipped', reason: 'agents_at_capacity' };
     }
 
     // 5. Atribuir a conversa principal (que também adicionará o gerente como participante)

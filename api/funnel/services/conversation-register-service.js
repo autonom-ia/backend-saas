@@ -196,7 +196,7 @@ const createConversationFunnelRegister = async (registerData) => {
       const stepId = registerData.conversation_funnel_step_id;
       if (stepId) {
         const step = await db('conversation_funnel_step')
-          .select('assign_to_team')
+          .select('assign_to_team', 'chatwoot_team_id')
           .where('id', stepId)
           .first();
         if (step && step.assign_to_team) {
@@ -220,6 +220,7 @@ const createConversationFunnelRegister = async (registerData) => {
               contactId,
               inboxId,
               conversationId,
+              chatwootTeamId: step && step.chatwoot_team_id ? step.chatwoot_team_id : null,
             };
             const url = 'https://api-clients.autonomia.site/Autonomia/Clients/AssignContacts';
             

@@ -28,6 +28,7 @@ const createStep = async ({
   order,
   kanban_code,
   assign_to_team,
+  chatwoot_team_id,
 }) => {
   const knex = getDbConnection();
   if (!name || !description || !conversation_funnel_id) {
@@ -38,6 +39,7 @@ const createStep = async ({
   if (order !== undefined) insertData.order = order;
   if (kanban_code !== undefined) insertData.kanban_code = kanban_code;
   if (assign_to_team !== undefined) insertData.assign_to_team = assign_to_team;
+  if (chatwoot_team_id !== undefined) insertData.chatwoot_team_id = chatwoot_team_id;
   const [created] = await knex('conversation_funnel_step')
     .insert(insertData)
     .returning('*');
@@ -47,7 +49,7 @@ const createStep = async ({
 // Atualiza step
 const updateStep = async (
   id,
-  { name, description, conversation_funnel_id, agent_instruction, order, kanban_code, assign_to_team }
+  { name, description, conversation_funnel_id, agent_instruction, order, kanban_code, assign_to_team, chatwoot_team_id }
 ) => {
   const knex = getDbConnection();
   await getStepById(id);
@@ -59,6 +61,7 @@ const updateStep = async (
   if (order !== undefined) updateData.order = order;
   if (kanban_code !== undefined) updateData.kanban_code = kanban_code;
   if (assign_to_team !== undefined) updateData.assign_to_team = assign_to_team;
+  if (chatwoot_team_id !== undefined) updateData.chatwoot_team_id = chatwoot_team_id;
   const [updated] = await knex('conversation_funnel_step')
     .where({ id })
     .update(updateData)

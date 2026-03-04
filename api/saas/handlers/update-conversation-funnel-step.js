@@ -27,6 +27,7 @@ exports.handler = async (event) => {
       order,
       kanban_code,
       assign_to_team,
+      chatwoot_team_id,
     } = body;
     if (
       name === undefined &&
@@ -35,7 +36,8 @@ exports.handler = async (event) => {
       agent_instruction === undefined &&
       order === undefined &&
       kanban_code === undefined &&
-      assign_to_team === undefined
+      assign_to_team === undefined &&
+      chatwoot_team_id === undefined
     ) {
       return errorResponse({ success: false, message: 'Forneça ao menos um campo para atualizar' }, 400);
     }
@@ -48,6 +50,7 @@ exports.handler = async (event) => {
       order,
       kanban_code,
       assign_to_team,
+      chatwoot_team_id,
     });
     return success({ success: true, message: 'Step atualizado com sucesso', data: updated }, 200);
   } catch (error) {

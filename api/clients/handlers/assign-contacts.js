@@ -11,7 +11,7 @@ module.exports.handler = async (event) => {
     console.log('Evento recebido para atribuição:', JSON.stringify(event, null, 2));
     
     const body = JSON.parse(event.body || '{}');
-    const { accountId, systemAccountId, contactId, inboxId, conversationId } = body;
+    const { accountId, systemAccountId, contactId, inboxId, conversationId, chatwootTeamId } = body;
     
     if (!accountId || !contactId || !inboxId || !conversationId) {
       return error('Parâmetros accountId, contactId, inboxId e conversationId são obrigatórios.', 400);
@@ -37,7 +37,7 @@ module.exports.handler = async (event) => {
     
     // accountId é o chatwoot-account ID, resolvedSystemAccountId é o account_id do sistema
     console.log(`Iniciando atribuição para conversationId: ${conversationId} na conta Chatwoot ${accountId} (system account ${resolvedSystemAccountId})`);
-    const result = await assignContactToAgent(accountId, resolvedSystemAccountId, contactId, inboxId, conversationId);
+    const result = await assignContactToAgent(accountId, resolvedSystemAccountId, contactId, inboxId, conversationId, chatwootTeamId);
     
     console.log('Resultado da atribuição:', JSON.stringify(result, null, 2));
     return success({ message: 'Atribuição processada com sucesso', data: result });
