@@ -24,15 +24,20 @@ const getProductsForUser = async (userId) => {
     .orderBy('p.created_at', 'desc');
 };
 
-const getProductsByDomain = async (domain) => {
+const getProductsByDomain = async (domain, isApproved) => {
   const knex = getDbConnection();
-  return knex('product as p')
+  const query = knex('product as p')
     .distinct('p.*', 'product_type.description as product_type_description', 'product_type.id as product_type_id')
     .join('company as c', 'p.company_id', 'c.id')
     .leftJoin('product_type', 'p.product_type_id', 'product_type.id')
     .where('c.domain', domain)
-    .andWhere('p.is_approved', true)
     .orderBy('p.created_at', 'desc');
+
+  if (typeof isApproved !== 'undefined') {
+    query.andWhere('p.is_approved', !!isApproved);
+  }
+
+  return query;
 };
 
 /**
@@ -58,7 +63,7 @@ const getProductById = async (id) => {
  * @param {string} productData.domain - Domínio associado à empresa do produto
  * @returns {Promise<Object>} Produto criado
  */
-const createProduct = async ({ name, description, product_type_id, domain, conversation_funnel_id }) => {
+const createProduct = async ({ name, description, product_type_id, domain, conversation_funnel_id, subdomain, is_approved }) => {
   const knex = getDbConnection();
 
   let companyId = null;
@@ -77,6 +82,8 @@ const createProduct = async ({ name, description, product_type_id, domain, conve
       product_type_id: product_type_id || null,
       company_id: companyId,
       conversation_funnel_id: conversation_funnel_id || null,
+      subdomain: typeof subdomain !== 'undefined' ? subdomain : null,
+      is_approved: typeof is_approved !== 'undefined' ? !!is_approved : false,
     })
     .returning('*');
   
@@ -89,7 +96,7 @@ const createProduct = async ({ name, description, product_type_id, domain, conve
  * @param {Object} productData - Dados do produto a atualizar
  * @returns {Promise<Object>} Produto atualizado
  */
-const updateProduct = async (id, { name, description, product_type_id, conversation_funnel_id }) => {
+const updateProduct = async (id, { name, description, product_type_id, conversation_funnel_id, subdomain, is_approved }) => {
   const knex = getDbConnection();
   
   // Verificar se o produto existe
@@ -114,6 +121,14 @@ const updateProduct = async (id, { name, description, product_type_id, conversat
   
   if (typeof conversation_funnel_id !== 'undefined') {
     updateData.conversation_funnel_id = conversation_funnel_id || null;
+  }
+ 
+  if (typeof subdomain !== 'undefined') {
+    updateData.subdomain = subdomain || null;
+  }
+
+  if (typeof is_approved !== 'undefined') {
+    updateData.is_approved = !!is_approved;
   }
   
   const [updatedProduct] = await knex('product')

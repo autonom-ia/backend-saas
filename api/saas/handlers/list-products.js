@@ -41,6 +41,10 @@ exports.handler = withCors(async (event, context) => {
 
     const queryParams = event.queryStringParameters || {};
     const domain = queryParams.domain;
+    const isApprovedParam = queryParams.is_approved;
+    const isApproved = typeof isApprovedParam !== 'undefined'
+      ? (isApprovedParam === 'true' || isApprovedParam === true)
+      : undefined;
 
     let products;
 
@@ -56,7 +60,7 @@ exports.handler = withCors(async (event, context) => {
         );
       }
 
-      products = await getProductsByDomain(domain);
+      products = await getProductsByDomain(domain, isApproved);
     } else {
       // Comportamento legado: Admin vê todos os produtos; demais veem apenas os vinculados às suas contas
       products = isAdmin
