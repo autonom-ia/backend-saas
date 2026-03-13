@@ -34,13 +34,16 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    const { name, description, product_type_id, conversation_funnel_id } = requestBody;
+    const { name, description, product_type_id, conversation_funnel_id, subdomain, is_approved } = requestBody;
 
     // Validar se pelo menos um campo foi fornecido para atualização
     if (
       typeof name === "undefined" &&
       typeof description === "undefined" &&
-      typeof product_type_id === "undefined"
+      typeof product_type_id === "undefined" &&
+      typeof conversation_funnel_id === "undefined" &&
+      typeof subdomain === "undefined" &&
+      typeof is_approved === "undefined"
     ) {
       return errorResponse(
         {
@@ -57,6 +60,8 @@ exports.handler = withCors(async (event, context) => {
       description,
       product_type_id,
       conversation_funnel_id,
+      subdomain,
+      is_approved,
     });
 
     return success(
