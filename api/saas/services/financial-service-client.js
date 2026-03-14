@@ -258,9 +258,170 @@ const associateOnboardingData = async (body, token) => {
   }
 };
 
+const listAccountSubscriptionsByAccountId = async (userId, accountId, token) => {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl || !userId || !accountId) {
+    return [];
+  }
+
+  const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
+  const url = `${baseUrl}/account-subscriptions?userId=${encodeURIComponent(userId)}&accountId=${encodeURIComponent(accountId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('[financial-service-client] listAccountSubscriptionsByAccountId failed', {
+        status: res.status,
+        body: text,
+        accountId,
+      });
+      return [];
+    }
+
+    const json = await res.json();
+    return Array.isArray(json) ? json : (json.data || []);
+  } catch (err) {
+    console.error('[financial-service-client] listAccountSubscriptionsByAccountId error', {
+      accountId,
+      error: err?.message || err,
+    });
+    return [];
+  }
+};
+
+const updateAccountSubscription = async (accountSubscriptionId, body, token) => {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl || !accountSubscriptionId) {
+    return null;
+  }
+
+  const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
+  const url = `${baseUrl}/account-subscriptions/${encodeURIComponent(accountSubscriptionId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('[financial-service-client] updateAccountSubscription failed', {
+        status: res.status,
+        body: text,
+        accountSubscriptionId,
+      });
+      return null;
+    }
+
+    const json = await res.json();
+    return json?.data ?? json ?? null;
+  } catch (err) {
+    console.error('[financial-service-client] updateAccountSubscription error', {
+      accountSubscriptionId,
+      error: err?.message || err,
+    });
+    return null;
+  }
+};
+
+const listInvoicesByAccountSubscriptionId = async (accountSubscriptionId, token) => {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl || !accountSubscriptionId) {
+    return [];
+  }
+
+  const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
+  const url = `${baseUrl}/invoices?accountSubscriptionId=${encodeURIComponent(accountSubscriptionId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('[financial-service-client] listInvoicesByAccountSubscriptionId failed', {
+        status: res.status,
+        body: text,
+        accountSubscriptionId,
+      });
+      return [];
+    }
+
+    const json = await res.json();
+    return Array.isArray(json) ? json : (json.data || []);
+  } catch (err) {
+    console.error('[financial-service-client] listInvoicesByAccountSubscriptionId error', {
+      accountSubscriptionId,
+      error: err?.message || err,
+    });
+    return [];
+  }
+};
+
+const cancelInvoice = async (invoiceId, token) => {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl || !invoiceId) {
+    return null;
+  }
+
+  const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
+  const url = `${baseUrl}/invoices/${encodeURIComponent(invoiceId)}/cancel`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('[financial-service-client] cancelInvoice failed', {
+        status: res.status,
+        body: text,
+        invoiceId,
+      });
+      return null;
+    }
+
+    const json = await res.json();
+    return json?.data ?? json ?? null;
+  } catch (err) {
+    console.error('[financial-service-client] cancelInvoice error', {
+      invoiceId,
+      error: err?.message || err,
+    });
+    return null;
+  }
+};
+
 module.exports = {
   getProductPlansByProductId,
   resolvePlanFromOnboarding,
   createAccountSubscription,
   associateOnboardingData,
+  listAccountSubscriptionsByAccountId,
+  updateAccountSubscription,
+  listInvoicesByAccountSubscriptionId,
+  cancelInvoice,
 };

@@ -3,7 +3,7 @@
 const fetch = global.fetch;
 
 function getWahaBaseUrl() {
-  const envUrl = process.env.WAHA_API_URL || '';
+  const envUrl = process.env.WAHA_URL || process.env.WAHA_API_URL || '';
   if (envUrl) {
     return envUrl.replace(/\/$/, '');
   }
@@ -89,8 +89,34 @@ async function syncInternalWhatsappEnvironment({ accountId, inboxId }) {
   return res.json().catch(() => ({}));
 }
 
+async function cleanupCancelledAccount({ accountId, token }) {
+  const baseUrl = getWahaBaseUrl();
+  const url = `${baseUrl}/Autonomia/Waha/Accounts/${encodeURIComponent(accountId)}/CleanupCancelledAccount`;
+  const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authHeader ? { Authorization: authHeader } : {}),
+    },
+    body: JSON.stringify({ account_id: accountId }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const error = new Error(`WAHA cleanup failed with status ${res.status}`);
+    error.statusCode = res.status;
+    error.body = text;
+    throw error;
+  }
+
+  return res.json().catch(() => ({}));
+}
+
 module.exports = {
   createInternalSession,
   getInternalConnectionState,
   syncInternalWhatsappEnvironment,
+  cleanupCancelledAccount,
 };

@@ -90,6 +90,7 @@ async function buildFunnel(knex, contacts) {
   // Busca todos os estágios do funil associado à account
   const steps = await knex('conversation_funnel_step as s')
     .where('s.conversation_funnel_id', accountRow.conversation_funnel_id)
+    .andWhere('s.visible_in_sales_funnel', true)
     .orderBy('s.order', 'asc');
 
   if (!steps.length) {
@@ -103,6 +104,7 @@ async function buildFunnel(knex, contacts) {
     .join('conversation_funnel_step as s', 's.id', 'ki.funnel_stage_id')
     .whereIn('c.id', contactIds)
     .where('s.conversation_funnel_id', accountRow.conversation_funnel_id)
+    .andWhere('s.visible_in_sales_funnel', true)
     .select('c.id as contact_id', 's.order as step_order');
 
   const contactMaxOrder = new Map();

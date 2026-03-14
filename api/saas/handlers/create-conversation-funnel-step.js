@@ -22,6 +22,7 @@ exports.handler = async (event) => {
       order,
       kanban_code,
       assign_to_team,
+      visible_in_sales_funnel,
     } = body;
     if (!name || !description || !conversation_funnel_id) {
       return errorResponse({ success: false, message: 'Campos obrigatórios: name, description, conversation_funnel_id' }, 400);
@@ -34,6 +35,7 @@ exports.handler = async (event) => {
       order,
       kanban_code,
       assign_to_team,
+      visible_in_sales_funnel,
     });
     return success({ success: true, message: 'Step criado com sucesso', data: created }, 201);
   } catch (error) {

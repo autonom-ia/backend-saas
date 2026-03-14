@@ -178,3 +178,22 @@ functions:
           path: Autonomia/Waha/CreateChatwootAttendanceUser
           method: options
           cors: true
+
+  cleanupCancelledAccount:
+    handler: handlers/cleanup-cancelled-account.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Waha/Accounts/{accountId}/CleanupCancelledAccount
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+      - http:
+          path: Autonomia/Waha/Accounts/{accountId}/CleanupCancelledAccount
+          method: options
+          cors: true

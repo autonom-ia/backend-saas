@@ -370,6 +370,19 @@ functions:
                 accountId: true
           authorizer: ${self:custom.authorizer}
 
+  cancelAccountSubscription:
+    handler: handlers/cancel-account-subscription.handler
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}/CancelSubscription
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
   listProductParameters:
     handler: handlers/list-product-parameters.handler
     events:

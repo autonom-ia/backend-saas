@@ -944,9 +944,148 @@ async function createChatwootAttendanceUser(accountId, email, password) {
   };
 }
 
+async function cleanupCancelledAccount(accountId) {
+  if (!accountId) {
+    throw new Error('account_id is required');
+  }
+
+  const db = getDbConnection();
+  const inboxes = await db('inbox').where({ account_id: accountId }).select('id', 'name');
+
+  try {
+    const client = await getWahaClient(accountId);
+    await Promise.all(
+      inboxes.map(async (inbox) => {
+        const sessionName = String(inbox.name || '').trim();
+        if (!sessionName) {
+          return;
+        }
+
+        try {
+          await client.delete(`/api/sessions/${encodeURIComponent(sessionName)}`);
+        } catch (error) {
+          const status = error?.response?.status;
+          if (status !== 404) {
+            throw error;
+          }
+        }
+      })
+    );
+  } catch (error) {
+    console.error('[Waha.cleanupCancelledAccount] WAHA cleanup failed', {
+      accountId,
+      error: error?.message || error,
+    });
+    throw error;
+  }
+
+  try {
+    const chatwootUrl = await getParameterValue(accountId, 'chatwoot-url', {
+      required: false,
+      aliases: ['CHATWOOT_URL'],
+    });
+    const chatwootToken = await getParameterValue(accountId, 'chatwoot-token', {
+      required: false,
+      aliases: ['CHATWOOT_TOKEN'],
+    });
+    const chatwootAccountId = await getParameterValue(accountId, 'chatwoot-account', {
+      required: false,
+      aliases: ['CHATWOOT_ACCOUNT'],
+    });
+
+    if (!chatwootUrl || !chatwootToken || !chatwootAccountId) {
+      throw new Error('Chatwoot parameters not configured for cleanup');
+    }
+
+    const cwAccount = axios.create({
+      baseURL: chatwootUrl,
+      timeout: 20000,
+      headers: { api_access_token: String(chatwootToken).trim() },
+    });
+
+    try {
+      const { data: usersData } = await cwAccount.get(
+        `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users`
+      );
+      const accountUsers = Array.isArray(usersData?.payload)
+        ? usersData.payload
+        : Array.isArray(usersData)
+          ? usersData
+          : [];
+
+      await Promise.all(
+        accountUsers.map(async (accountUser) => {
+          const accountUserId = accountUser?.id || accountUser?.account_user?.id;
+          if (!accountUserId || Number(accountUser?.user_id) === 1) {
+            return;
+          }
+
+          try {
+            await cwAccount.delete(
+              `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users/${encodeURIComponent(String(accountUserId))}`
+            );
+          } catch (error) {
+            const status = error?.response?.status;
+            if (status !== 404) {
+              throw error;
+            }
+          }
+        })
+      );
+    } catch (error) {
+      console.warn('[Waha.cleanupCancelledAccount] Unable to remove Chatwoot account users', {
+        accountId,
+        error: error?.message || error,
+      });
+    }
+
+    try {
+      await cwAccount.delete(`/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`);
+    } catch (error) {
+      const status = error?.response?.status;
+      if (status !== 404) {
+        console.warn('[Waha.cleanupCancelledAccount] Unable to delete Chatwoot account', {
+          accountId,
+          error: error?.message || error,
+        });
+      }
+    }
+  } catch (error) {
+    console.warn('[Waha.cleanupCancelledAccount] Chatwoot cleanup skipped/failed', {
+      accountId,
+      error: error?.message || error,
+    });
+  }
+
+  const userRelations = await db('user_accounts').where({ account_id: accountId }).select('user_id');
+  const userIds = userRelations.map((relation) => relation.user_id).filter(Boolean);
+
+  await db('user_accounts').where({ account_id: accountId }).delete();
+  await db('account_parameter').where({ account_id: accountId }).delete();
+  await db('inbox').where({ account_id: accountId }).delete();
+
+  if (userIds.length > 0) {
+    await Promise.all(
+      userIds.map(async (userId) => {
+        const otherAccount = await db('user_accounts').where({ user_id: userId }).first();
+        if (!otherAccount) {
+          await db('users').where({ id: userId }).delete();
+        }
+      })
+    );
+  }
+
+  return {
+    success: true,
+    deletedInboxes: inboxes.length,
+    deletedUsers: userIds.length,
+  };
+}
+
 module.exports = {
   createSession,
   connectionState,
   syncWhatsappEnvironment,
   createChatwootAttendanceUser,
+  cleanupCancelledAccount,
 };
