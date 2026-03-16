@@ -90,28 +90,74 @@ async function syncInternalWhatsappEnvironment({ accountId, inboxId }) {
 }
 
 async function cleanupCancelledAccount({ accountId, token }) {
+  const startedAt = Date.now();
   const baseUrl = getWahaBaseUrl();
   const url = `${baseUrl}/Autonomia/Waha/Accounts/${encodeURIComponent(accountId)}/CleanupCancelledAccount`;
   const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(authHeader ? { Authorization: authHeader } : {}),
-    },
-    body: JSON.stringify({ account_id: accountId }),
+  console.info('[waha-service-client] cleanupCancelledAccount started', {
+    accountId,
+    baseUrl,
+    url,
+    hasAuthorization: !!authHeader,
+  });
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+      body: JSON.stringify({ account_id: accountId }),
+    });
+  } catch (error) {
+    console.error('[waha-service-client] cleanupCancelledAccount fetch failed', {
+      accountId,
+      baseUrl,
+      url,
+      elapsedMs: Date.now() - startedAt,
+      error: error?.message || String(error),
+      cause: error?.cause
+        ? {
+            message: error.cause?.message || String(error.cause),
+            code: error.cause?.code || null,
+            stack: error.cause?.stack || null,
+          }
+        : null,
+    });
+    throw error;
+  }
+
+  console.info('[waha-service-client] cleanupCancelledAccount response received', {
+    accountId,
+    status: res.status,
+    ok: res.ok,
+    elapsedMs: Date.now() - startedAt,
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.error('[waha-service-client] cleanupCancelledAccount non-ok response', {
+      accountId,
+      status: res.status,
+      body: text,
+      elapsedMs: Date.now() - startedAt,
+    });
     const error = new Error(`WAHA cleanup failed with status ${res.status}`);
     error.statusCode = res.status;
     error.body = text;
     throw error;
   }
 
-  return res.json().catch(() => ({}));
+  const payload = await res.json().catch(() => ({}));
+  console.info('[waha-service-client] cleanupCancelledAccount completed', {
+    accountId,
+    elapsedMs: Date.now() - startedAt,
+    payload,
+  });
+  return payload;
 }
 
 module.exports = {

@@ -259,13 +259,26 @@ const associateOnboardingData = async (body, token) => {
 };
 
 const listAccountSubscriptionsByAccountId = async (userId, accountId, token) => {
+  const startedAt = Date.now();
   const baseUrl = getBaseUrl();
   if (!baseUrl || !userId || !accountId) {
+    console.warn('[financial-service-client] listAccountSubscriptionsByAccountId skipped', {
+      hasBaseUrl: !!baseUrl,
+      hasUserId: !!userId,
+      hasAccountId: !!accountId,
+    });
     return [];
   }
 
   const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
   const url = `${baseUrl}/account-subscriptions?userId=${encodeURIComponent(userId)}&accountId=${encodeURIComponent(accountId)}`;
+
+  console.info('[financial-service-client] listAccountSubscriptionsByAccountId started', {
+    accountId,
+    userId,
+    url,
+    baseUrl,
+  });
 
   try {
     const res = await fetch(url, {
@@ -276,35 +289,61 @@ const listAccountSubscriptionsByAccountId = async (userId, accountId, token) => 
       },
     });
 
+    console.info('[financial-service-client] listAccountSubscriptionsByAccountId response received', {
+      accountId,
+      status: res.status,
+      ok: res.ok,
+      elapsedMs: Date.now() - startedAt,
+    });
+
     if (!res.ok) {
       const text = await res.text();
       console.error('[financial-service-client] listAccountSubscriptionsByAccountId failed', {
         status: res.status,
         body: text,
         accountId,
+        elapsedMs: Date.now() - startedAt,
       });
       return [];
     }
 
     const json = await res.json();
-    return Array.isArray(json) ? json : (json.data || []);
+    const subscriptions = Array.isArray(json) ? json : (json.data || []);
+    console.info('[financial-service-client] listAccountSubscriptionsByAccountId completed', {
+      accountId,
+      subscriptionsCount: subscriptions.length,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return subscriptions;
   } catch (err) {
     console.error('[financial-service-client] listAccountSubscriptionsByAccountId error', {
       accountId,
       error: err?.message || err,
+      elapsedMs: Date.now() - startedAt,
     });
     return [];
   }
 };
 
 const updateAccountSubscription = async (accountSubscriptionId, body, token) => {
+  const startedAt = Date.now();
   const baseUrl = getBaseUrl();
   if (!baseUrl || !accountSubscriptionId) {
+    console.warn('[financial-service-client] updateAccountSubscription skipped', {
+      hasBaseUrl: !!baseUrl,
+      hasAccountSubscriptionId: !!accountSubscriptionId,
+    });
     return null;
   }
 
   const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
   const url = `${baseUrl}/account-subscriptions/${encodeURIComponent(accountSubscriptionId)}`;
+
+  console.info('[financial-service-client] updateAccountSubscription started', {
+    accountSubscriptionId,
+    url,
+    body,
+  });
 
   try {
     const res = await fetch(url, {
@@ -316,35 +355,60 @@ const updateAccountSubscription = async (accountSubscriptionId, body, token) => 
       body: JSON.stringify(body),
     });
 
+    console.info('[financial-service-client] updateAccountSubscription response received', {
+      accountSubscriptionId,
+      status: res.status,
+      ok: res.ok,
+      elapsedMs: Date.now() - startedAt,
+    });
+
     if (!res.ok) {
       const text = await res.text();
       console.error('[financial-service-client] updateAccountSubscription failed', {
         status: res.status,
         body: text,
         accountSubscriptionId,
+        elapsedMs: Date.now() - startedAt,
       });
       return null;
     }
 
     const json = await res.json();
-    return json?.data ?? json ?? null;
+    const subscription = json?.data ?? json ?? null;
+    console.info('[financial-service-client] updateAccountSubscription completed', {
+      accountSubscriptionId,
+      updated: !!subscription,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return subscription;
   } catch (err) {
     console.error('[financial-service-client] updateAccountSubscription error', {
       accountSubscriptionId,
       error: err?.message || err,
+      elapsedMs: Date.now() - startedAt,
     });
     return null;
   }
 };
 
 const listInvoicesByAccountSubscriptionId = async (accountSubscriptionId, token) => {
+  const startedAt = Date.now();
   const baseUrl = getBaseUrl();
   if (!baseUrl || !accountSubscriptionId) {
+    console.warn('[financial-service-client] listInvoicesByAccountSubscriptionId skipped', {
+      hasBaseUrl: !!baseUrl,
+      hasAccountSubscriptionId: !!accountSubscriptionId,
+    });
     return [];
   }
 
   const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
   const url = `${baseUrl}/invoices?accountSubscriptionId=${encodeURIComponent(accountSubscriptionId)}`;
+
+  console.info('[financial-service-client] listInvoicesByAccountSubscriptionId started', {
+    accountSubscriptionId,
+    url,
+  });
 
   try {
     const res = await fetch(url, {
@@ -355,35 +419,60 @@ const listInvoicesByAccountSubscriptionId = async (accountSubscriptionId, token)
       },
     });
 
+    console.info('[financial-service-client] listInvoicesByAccountSubscriptionId response received', {
+      accountSubscriptionId,
+      status: res.status,
+      ok: res.ok,
+      elapsedMs: Date.now() - startedAt,
+    });
+
     if (!res.ok) {
       const text = await res.text();
       console.error('[financial-service-client] listInvoicesByAccountSubscriptionId failed', {
         status: res.status,
         body: text,
         accountSubscriptionId,
+        elapsedMs: Date.now() - startedAt,
       });
       return [];
     }
 
     const json = await res.json();
-    return Array.isArray(json) ? json : (json.data || []);
+    const invoices = Array.isArray(json) ? json : (json.data || []);
+    console.info('[financial-service-client] listInvoicesByAccountSubscriptionId completed', {
+      accountSubscriptionId,
+      invoicesCount: invoices.length,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return invoices;
   } catch (err) {
     console.error('[financial-service-client] listInvoicesByAccountSubscriptionId error', {
       accountSubscriptionId,
       error: err?.message || err,
+      elapsedMs: Date.now() - startedAt,
     });
     return [];
   }
 };
 
 const cancelInvoice = async (invoiceId, token) => {
+  const startedAt = Date.now();
   const baseUrl = getBaseUrl();
   if (!baseUrl || !invoiceId) {
+    console.warn('[financial-service-client] cancelInvoice skipped', {
+      hasBaseUrl: !!baseUrl,
+      hasInvoiceId: !!invoiceId,
+    });
     return null;
   }
 
   const authHeader = token && !token.startsWith('Bearer ') ? `Bearer ${token}` : (token || '');
   const url = `${baseUrl}/invoices/${encodeURIComponent(invoiceId)}/cancel`;
+
+  console.info('[financial-service-client] cancelInvoice started', {
+    invoiceId,
+    url,
+  });
 
   try {
     const res = await fetch(url, {
@@ -394,22 +483,37 @@ const cancelInvoice = async (invoiceId, token) => {
       },
     });
 
+    console.info('[financial-service-client] cancelInvoice response received', {
+      invoiceId,
+      status: res.status,
+      ok: res.ok,
+      elapsedMs: Date.now() - startedAt,
+    });
+
     if (!res.ok) {
       const text = await res.text();
       console.error('[financial-service-client] cancelInvoice failed', {
         status: res.status,
         body: text,
         invoiceId,
+        elapsedMs: Date.now() - startedAt,
       });
       return null;
     }
 
     const json = await res.json();
-    return json?.data ?? json ?? null;
+    const invoice = json?.data ?? json ?? null;
+    console.info('[financial-service-client] cancelInvoice completed', {
+      invoiceId,
+      canceled: !!invoice,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return invoice;
   } catch (err) {
     console.error('[financial-service-client] cancelInvoice error', {
       invoiceId,
       error: err?.message || err,
+      elapsedMs: Date.now() - startedAt,
     });
     return null;
   }

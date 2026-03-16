@@ -12,10 +12,7 @@ const ADMIN_PROFILE_ID = 'b36dd047-1634-4a89-97f3-127688104dd0';
  */
 const getAllAccounts = async (filters = {}) => {
   const knex = getDbConnection();
-  const query = knex('account')
-    .select('account.*', 'product.name as product_name')
-    .join('product', 'account.product_id', 'product.id')
-    .where('account.is_deleted', false);
+  const query = knex('account').select('account.*', 'product.name as product_name').join('product', 'account.product_id', 'product.id');
   
   if (filters.productId) {
     query.where({ product_id: filters.productId });
@@ -36,7 +33,7 @@ const getAllAccounts = async (filters = {}) => {
  */
 const getAccountById = async (id) => {
   const knex = getDbConnection();
-  const account = await knex('account').where({ id, is_deleted: false }).first();
+  const account = await knex('account').where({ id }).first();
   if (!account) {
     throw new Error('Conta não encontrada');
   }
@@ -81,7 +78,7 @@ const createAccount = async ({ social_name, name, email, phone, product_id, docu
   }
 
   const [newAccount] = await knex('account')
-    .insert({ social_name, name, email, phone: normalizedPhone, product_id, document, instance, conversation_funnel_id: finalConversationFunnelId, domain, is_deleted: false })
+    .insert({ social_name, name, email, phone: normalizedPhone, product_id, document, instance, conversation_funnel_id: finalConversationFunnelId, domain })
     .returning('*');
   return newAccount;
 };
@@ -133,9 +130,7 @@ const updateAccount = async (id, { social_name, name, email, phone, product_id, 
 const deleteAccount = async (id) => {
   const knex = getDbConnection();
   await getAccountById(id);
-  await knex('account')
-    .where({ id })
-    .update({ is_deleted: true, updated_at: knex.fn.now() });
+  await knex('account').where({ id }).delete();
   return true;
 };
 
@@ -157,8 +152,7 @@ const getAccountsForUser = async (userId, filters = {}) => {
 
   let query = knex('account')
     .select('account.*', 'product.name as product_name')
-    .join('product', 'account.product_id', 'product.id')
-    .where('account.is_deleted', false);
+    .join('product', 'account.product_id', 'product.id');
 
   if (!isAdmin) {
     query = query

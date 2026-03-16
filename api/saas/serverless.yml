@@ -92,6 +92,7 @@ provider:
     WEBHOOK_EVENTS_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/140023375763/webhook-service-events-queue-${self:provider.stage}
     # URL do financial-service (usado só se invocação Lambda não estiver configurada). Para sincronizar: no repo financial-service execute ./scripts/sync-financial-api-url-ssm.sh production prod us-east-1.
     FINANCIAL_SERVICE_URL: ${ssm:/financial-service/${self:provider.stage}/api-url, ''}
+    WAHA_URL: ${ssm:/autonomia/${self:provider.stage}/waha/url, 'https://api-waha.autonomia.site'}
     # Invocação direta da Lambda do financial-service (evita HTTP; Lambdas em VPC sem NAT não alcançam API Gateway). Backend stage prod -> financial stage production.
     FINANCIAL_SERVICE_CREATE_SUBSCRIPTION_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-createAccountSubscription
     FINANCIAL_SERVICE_ASSOCIATE_ONBOARDING_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-associateOnboardingData
@@ -344,6 +345,21 @@ functions:
           cors: true
           authorizer: ${self:custom.authorizer}
 
+  cancelAccountSubscription:
+    handler: handlers/cancel-account-subscription.handler
+    description: Cancela assinatura, limpa recursos WAHA, inativa subscriptions e cancela invoices pendentes
+    vpc: null
+    events:
+      - http:
+          path: Autonomia/Saas/Accounts/{accountId}/CancelSubscription
+          method: post
+          cors: true
+          request:
+            parameters:
+              paths:
+                accountId: true
+          authorizer: ${self:custom.authorizer}
+
   updateAccount:
     handler: handlers/update-account.handler
     events:
@@ -363,19 +379,6 @@ functions:
       - http:
           path: Autonomia/Saas/Accounts/{accountId}
           method: delete
-          cors: true
-          request:
-            parameters:
-              paths:
-                accountId: true
-          authorizer: ${self:custom.authorizer}
-
-  cancelAccountSubscription:
-    handler: handlers/cancel-account-subscription.handler
-    events:
-      - http:
-          path: Autonomia/Saas/Accounts/{accountId}/CancelSubscription
-          method: post
           cors: true
           request:
             parameters:

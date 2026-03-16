@@ -188,11 +188,11 @@ functions:
           path: Autonomia/Waha/Accounts/{accountId}/CleanupCancelledAccount
           method: post
           cors: true
+          authorizer: ${self:custom.authorizer}
           request:
             parameters:
               paths:
                 accountId: true
-          authorizer: ${self:custom.authorizer}
       - http:
           path: Autonomia/Waha/Accounts/{accountId}/CleanupCancelledAccount
           method: options

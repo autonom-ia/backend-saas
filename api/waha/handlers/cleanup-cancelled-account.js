@@ -10,7 +10,12 @@ exports.handler = async (event) => {
     const origin = getOrigin(event);
     const body = JSON.parse(event.body || '{}');
     const qs = event.queryStringParameters || {};
-    const accountId = body.account_id || qs.account_id || event.pathParameters?.accountId;
+    const accountId =
+      event.pathParameters?.accountId ||
+      body.account_id ||
+      body.accountId ||
+      qs.account_id ||
+      qs.accountId;
 
     if (!accountId) {
       return createResponse(400, { message: 'account_id is required' }, origin);
@@ -20,6 +25,10 @@ exports.handler = async (event) => {
     return createResponse(200, result, origin);
   } catch (err) {
     console.error('Error in CleanupCancelledAccount (Waha):', err);
-    return createResponse(500, { message: 'Error cleaning cancelled account', details: err.message }, getOrigin(event));
+    return createResponse(
+      err?.statusCode || 500,
+      { message: err?.message || 'Internal server error' },
+      getOrigin(event)
+    );
   }
 };
