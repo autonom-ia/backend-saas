@@ -954,6 +954,49 @@ async function cleanupCancelledAccount(accountId) {
 
   console.info('[Waha.cleanupCancelledAccount] Start', { accountId });
 
+  const sanitizeHeaders = (headers = {}) => {
+    const normalizedHeaders = { ...headers };
+
+    if (normalizedHeaders.api_access_token) {
+      normalizedHeaders.api_access_token = '[REDACTED]';
+    }
+
+    if (normalizedHeaders.authorization) {
+      normalizedHeaders.authorization = '[REDACTED]';
+    }
+
+    if (normalizedHeaders.Authorization) {
+      normalizedHeaders.Authorization = '[REDACTED]';
+    }
+
+    return normalizedHeaders;
+  };
+
+  const logChatwootRequest = (message, payload) => {
+    console.info(message, payload);
+  };
+
+  const logChatwootError = (message, payload, error) => {
+    console.warn(message, {
+      ...payload,
+      error: error?.message || error,
+      status: error?.response?.status || null,
+      responseHeaders: error?.response?.headers || null,
+      responseData: error?.response?.data || null,
+      requestConfig: error?.config
+        ? {
+            baseURL: error.config.baseURL || null,
+            url: error.config.url || null,
+            method: error.config.method || null,
+            headers: sanitizeHeaders(error.config.headers || {}),
+            data: error.config.data || null,
+            params: error.config.params || null,
+            timeout: error.config.timeout || null,
+          }
+        : null,
+    });
+  };
+
   const account = await db('account').where({ id: accountId }).first();
   if (!account) {
     throw new Error(`Conta não encontrada para account_id: ${accountId}`);
@@ -1059,9 +1102,27 @@ async function cleanupCancelledAccount(accountId) {
 
     if (cwPlatform) {
       try {
+        logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot account users list request', {
+          accountId,
+          chatwootAccountId,
+          request: {
+            baseURL: String(chatwootUrl).trim(),
+            url: `/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users`,
+            method: 'get',
+            headers: sanitizeHeaders({ api_access_token: chatwootPlatformToken }),
+            timeout: 20000,
+          },
+        });
         const accountUsersResp = await cwPlatform.get(
           `/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users`
         );
+        logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot account users list response', {
+          accountId,
+          chatwootAccountId,
+          status: accountUsersResp?.status || null,
+          headers: accountUsersResp?.headers || null,
+          data: accountUsersResp?.data || null,
+        });
         const accountUsers = Array.isArray(accountUsersResp?.data?.payload)
           ? accountUsersResp.data.payload
           : Array.isArray(accountUsersResp?.data)
@@ -1075,27 +1136,44 @@ async function cleanupCancelledAccount(accountId) {
           }
 
           try {
-            await cwPlatform.delete(
+            logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot account user delete request', {
+              accountId,
+              chatwootAccountId,
+              accountUser,
+              request: {
+                baseURL: String(chatwootUrl).trim(),
+                url: `/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users/${encodeURIComponent(String(accountUserId).trim())}`,
+                method: 'delete',
+                headers: sanitizeHeaders({ api_access_token: chatwootPlatformToken }),
+                timeout: 20000,
+              },
+            });
+            const deleteAccountUserResp = await cwPlatform.delete(
               `/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/account_users/${encodeURIComponent(String(accountUserId).trim())}`
             );
             chatwootAccountUsersRemoved += 1;
-          } catch (accountUserError) {
-            console.warn('[Waha.cleanupCancelledAccount] Failed to remove Chatwoot account user', {
+            logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot account user delete response', {
               accountId,
               chatwootAccountId,
               accountUserId,
-              error: accountUserError?.message || accountUserError,
-              status: accountUserError?.response?.status || null,
+              status: deleteAccountUserResp?.status || null,
+              headers: deleteAccountUserResp?.headers || null,
+              data: deleteAccountUserResp?.data || null,
             });
+          } catch (accountUserError) {
+            logChatwootError('[Waha.cleanupCancelledAccount] Failed to remove Chatwoot account user', {
+              accountId,
+              chatwootAccountId,
+              accountUserId,
+              accountUser,
+            }, accountUserError);
           }
         }
       } catch (listAccountUsersError) {
-        console.warn('[Waha.cleanupCancelledAccount] Failed to list Chatwoot account users', {
+        logChatwootError('[Waha.cleanupCancelledAccount] Failed to list Chatwoot account users', {
           accountId,
           chatwootAccountId,
-          error: listAccountUsersError?.message || listAccountUsersError,
-          status: listAccountUsersError?.response?.status || null,
-        });
+        }, listAccountUsersError);
       }
     } else {
       console.warn('[Waha.cleanupCancelledAccount] Skipping Chatwoot platform account user cleanup: missing platform token', {
@@ -1105,9 +1183,27 @@ async function cleanupCancelledAccount(accountId) {
     }
 
     try {
+      logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot inboxes list request', {
+        accountId,
+        chatwootAccountId,
+        request: {
+          baseURL: String(chatwootUrl).trim(),
+          url: `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes`,
+          method: 'get',
+          headers: sanitizeHeaders({ api_access_token: String(chatwootToken).trim() }),
+          timeout: 20000,
+        },
+      });
       const inboxesResp = await cwAccount.get(
         `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes`
       );
+      logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot inboxes list response', {
+        accountId,
+        chatwootAccountId,
+        status: inboxesResp?.status || null,
+        headers: inboxesResp?.headers || null,
+        data: inboxesResp?.data || null,
+      });
       const chatwootInboxes = Array.isArray(inboxesResp?.data?.data)
         ? inboxesResp.data.data
         : Array.isArray(inboxesResp?.data?.payload)
@@ -1123,40 +1219,74 @@ async function cleanupCancelledAccount(accountId) {
         }
 
         try {
-          await cwAccount.delete(
-            `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes/${encodeURIComponent(String(chatwootInboxId).trim())}`
-          );
-          chatwootInboxesRemoved += 1;
-        } catch (deleteInboxError) {
-          console.warn('[Waha.cleanupCancelledAccount] Failed to remove Chatwoot inbox', {
+          logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot inbox delete request', {
             accountId,
             chatwootAccountId,
             chatwootInboxId,
-            error: deleteInboxError?.message || deleteInboxError,
-            status: deleteInboxError?.response?.status || null,
+            inbox,
+            request: {
+              baseURL: String(chatwootUrl).trim(),
+              url: `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes/${encodeURIComponent(String(chatwootInboxId).trim())}`,
+              method: 'delete',
+              headers: sanitizeHeaders({ api_access_token: String(chatwootToken).trim() }),
+              timeout: 20000,
+            },
           });
+          const deleteInboxResp = await cwAccount.delete(
+            `/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}/inboxes/${encodeURIComponent(String(chatwootInboxId).trim())}`
+          );
+          chatwootInboxesRemoved += 1;
+          logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot inbox delete response', {
+            accountId,
+            chatwootAccountId,
+            chatwootInboxId,
+            status: deleteInboxResp?.status || null,
+            headers: deleteInboxResp?.headers || null,
+            data: deleteInboxResp?.data || null,
+          });
+        } catch (deleteInboxError) {
+          logChatwootError('[Waha.cleanupCancelledAccount] Failed to remove Chatwoot inbox', {
+            accountId,
+            chatwootAccountId,
+            chatwootInboxId,
+            inbox,
+          }, deleteInboxError);
         }
       }
     } catch (listInboxesError) {
-      console.warn('[Waha.cleanupCancelledAccount] Failed to list Chatwoot inboxes', {
+      logChatwootError('[Waha.cleanupCancelledAccount] Failed to list Chatwoot inboxes', {
         accountId,
         chatwootAccountId,
-        error: listInboxesError?.message || listInboxesError,
-        status: listInboxesError?.response?.status || null,
-      });
+      }, listInboxesError);
     }
 
     if (cwPlatform) {
       try {
-        await cwPlatform.delete(`/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`);
-        chatwootAccountRemoved = true;
-      } catch (deleteAccountError) {
-        console.warn('[Waha.cleanupCancelledAccount] Failed to remove Chatwoot account', {
+        logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot account delete request', {
           accountId,
           chatwootAccountId,
-          error: deleteAccountError?.message || deleteAccountError,
-          status: deleteAccountError?.response?.status || null,
+          request: {
+            baseURL: String(chatwootUrl).trim(),
+            url: `/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`,
+            method: 'delete',
+            headers: sanitizeHeaders({ api_access_token: chatwootPlatformToken }),
+            timeout: 20000,
+          },
         });
+        const deleteAccountResp = await cwPlatform.delete(`/platform/api/v1/accounts/${encodeURIComponent(String(chatwootAccountId).trim())}`);
+        chatwootAccountRemoved = true;
+        logChatwootRequest('[Waha.cleanupCancelledAccount] Chatwoot account delete response', {
+          accountId,
+          chatwootAccountId,
+          status: deleteAccountResp?.status || null,
+          headers: deleteAccountResp?.headers || null,
+          data: deleteAccountResp?.data || null,
+        });
+      } catch (deleteAccountError) {
+        logChatwootError('[Waha.cleanupCancelledAccount] Failed to remove Chatwoot account', {
+          accountId,
+          chatwootAccountId,
+        }, deleteAccountError);
       }
     } else {
       console.warn('[Waha.cleanupCancelledAccount] Skipping Chatwoot platform account removal: missing platform token', {

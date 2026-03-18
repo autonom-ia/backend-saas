@@ -85,8 +85,20 @@ const updateStep = async (
 // Remove step
 const deleteStep = async (id) => {
   const knex = getDbConnection();
-  await getStepById(id);
-  await knex('conversation_funnel_step').where({ id }).delete();
+  await knex.transaction(async (trx) => {
+    const step = await trx('conversation_funnel_step').where({ id }).first();
+
+    if (!step) {
+      throw new Error('Etapa de funil não encontrada');
+    }
+
+    await trx('kanban_items')
+      .where({ funnel_stage_id: id })
+      .delete();
+
+    await trx('conversation_funnel_step').where({ id }).delete();
+  });
+
   return true;
 };
 

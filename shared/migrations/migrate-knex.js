@@ -44,6 +44,7 @@ async function main() {
   console.log('Ferramenta de Migração - autonom.ia');
   console.log('====================================');
   console.log(`Banco de dados alvo: ${dbType.toUpperCase()}`);
+  console.log('Modo controlado para arquivos ausentes: use --allow-missing');
   
   try {
     let result;
@@ -82,6 +83,13 @@ async function main() {
           console.log('\nMigrações pendentes:', result.details.pending.length);
           if (result.details.pending.length > 0) {
             result.details.pending.forEach(migration => {
+              console.log(` - ${migration}`);
+            });
+          }
+
+          console.log('\nMigrações ausentes no diretório:', result.details.missing ? result.details.missing.length : 0);
+          if (result.details.missing && result.details.missing.length > 0) {
+            result.details.missing.forEach(migration => {
               console.log(` - ${migration}`);
             });
           }

@@ -22,8 +22,8 @@ const { getStatus, DB_TYPES } = require('./migrate-knex-api');
 
 async function checkPendingMigrations() {
   const results = {
-    default: { hasPending: false, pendingCount: 0, error: null },
-    clients: { hasPending: false, pendingCount: 0, error: null }
+    default: { hasPending: false, pendingCount: 0, missingCount: 0, missing: [], error: null },
+    clients: { hasPending: false, pendingCount: 0, missingCount: 0, missing: [], error: null }
   };
 
   // Verificar banco principal (suprimir logs do getStatus)
@@ -40,6 +40,8 @@ async function checkPendingMigrations() {
     if (defaultStatus.success && defaultStatus.details) {
       results.default.pendingCount = defaultStatus.details.pending ? defaultStatus.details.pending.length : 0;
       results.default.hasPending = results.default.pendingCount > 0;
+      results.default.missing = defaultStatus.details.missing || [];
+      results.default.missingCount = results.default.missing.length;
     } else {
       results.default.error = defaultStatus.message || 'Erro ao verificar status';
     }
@@ -60,6 +62,8 @@ async function checkPendingMigrations() {
     if (clientsStatus.success && clientsStatus.details) {
       results.clients.pendingCount = clientsStatus.details.pending ? clientsStatus.details.pending.length : 0;
       results.clients.hasPending = results.clients.pendingCount > 0;
+      results.clients.missing = clientsStatus.details.missing || [];
+      results.clients.missingCount = results.clients.missing.length;
     } else {
       results.clients.error = clientsStatus.message || 'Erro ao verificar status';
     }

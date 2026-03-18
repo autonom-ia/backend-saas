@@ -4,6 +4,32 @@ const { createInbox } = require('../services/inbox-service');
 const { success, error: errorResponse } = require('../utils/response');
 const { getUserFromEvent } = require('../utils/auth-user');
 
+const normalizeDocument = (value) => {
+  if (value == null) return null;
+  const normalized = value.toString().replace(/\D/g, '').trim();
+  return normalized || null;
+};
+
+const buildSuccessPayload = ({ account, productPlanId, document, productId, message }) => {
+  const payload = {
+    success: true,
+    message,
+    data: {
+      ...account,
+      parametersCreated: true,
+    },
+  };
+
+  if (productPlanId) {
+    payload.subscriptionPlanRequired = true;
+    payload.accountId = account.id;
+    payload.document = document != null ? document : (account.document || null);
+    payload.productId = productId;
+  }
+
+  return payload;
+};
+
 /**
  * Handler para criar uma conta via fluxo de onboarding
  * Cria a conta + inbox + parâmetros de uma vez
@@ -43,7 +69,37 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'accountPhone é obrigatório' }, 400);
     }
 
-    // Criar conta
+    const knex = getDbConnection();
+    const normalizedDocument = normalizeDocument(document);
+    const productPlanId = bodyProductPlanId ?? body.productPlanId ?? body.product_plan_id ?? null;
+    const subscriptionPlanRequired = !!productPlanId;
+
+    if (normalizedDocument) {
+      const existingAccount = await knex('account')
+        .where({ product_id: productId })
+        .whereRaw("regexp_replace(coalesce(document, ''), '[^0-9]', '', 'g') = ?", [normalizedDocument])
+        .first();
+
+      if (existingAccount) {
+        console.log('[create-account-onboarding] Conta existente encontrada por document + productId, ignorando nova criação', {
+          accountId: existingAccount.id,
+          productId,
+          normalizedDocument,
+        });
+
+        return success(
+          buildSuccessPayload({
+            account: existingAccount,
+            productPlanId,
+            document,
+            productId,
+            message: 'Conta encontrada com sucesso',
+          }),
+          200,
+        );
+      }
+    }
+
     const created = await createAccount({ 
       name: accountName,
       social_name: accountName,
@@ -54,7 +110,6 @@ exports.handler = async (event) => {
     });
 
     const accountId = created.id;
-    const knex = getDbConnection();
 
     // Criar parâmetro 'document' na account_parameter com o mesmo valor da conta
     try {
@@ -193,8 +248,6 @@ exports.handler = async (event) => {
     }
 
     // Assinatura é completada pelo frontend (browser → financial-service) para evitar Lambda em VPC chamar API/Lambda (exige VPC Endpoint ou NAT). Quando há productPlanId, retornamos subscriptionPlanRequired + accountId/document/productId para o front chamar POST /account-subscriptions/complete.
-    const productPlanId = bodyProductPlanId ?? body.productPlanId ?? body.product_plan_id ?? null;
-    const subscriptionPlanRequired = !!productPlanId;
     if (productPlanId) {
       console.log('[create-account-onboarding] productPlanId enviado; frontend completará assinatura via financial-service:', productPlanId);
     }
@@ -217,21 +270,16 @@ exports.handler = async (event) => {
       // Não interrompe; o front pode usar cookie/updateUserFirstLogin como fallback
     }
 
-    const payload = { 
-      success: true, 
-      message: 'Conta criada com sucesso', 
-      data: { 
-        ...created,
-        parametersCreated: true 
-      } 
-    };
-    if (subscriptionPlanRequired) {
-      payload.subscriptionPlanRequired = true;
-      payload.accountId = accountId;
-      payload.document = document != null ? document : (created.document || null);
-      payload.productId = productId;
-    }
-    return success(payload, 201);
+    return success(
+      buildSuccessPayload({
+        account: created,
+        productPlanId,
+        document,
+        productId,
+        message: 'Conta criada com sucesso',
+      }),
+      201,
+    );
   } catch (error) {
     console.error('Erro ao criar conta (onboarding):', error);
     return errorResponse({ 

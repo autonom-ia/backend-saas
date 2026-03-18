@@ -15,6 +15,63 @@ const DB_TYPES = {
   CLIENTS: 'clients'
 };
 
+const getMigrationsDirectory = (dbType = DB_TYPES.DEFAULT) => path.resolve(
+  __dirname,
+  dbType === DB_TYPES.CLIENTS ? './knex-clients' : './knex'
+);
+
+const getMigrationsTableName = (dbType = DB_TYPES.DEFAULT) => (
+  dbType === DB_TYPES.CLIENTS ? 'knex_migrations_clients' : 'knex_migrations'
+);
+
+const listMigrationFiles = async (migrationsDir) => {
+  try {
+    const files = await fs.readdir(migrationsDir);
+    return files.filter(file => file.endsWith('.js')).sort();
+  } catch (error) {
+    console.error(`Erro ao ler diretório de migrações ${migrationsDir}:`, error);
+    return [];
+  }
+};
+
+const getMigrationInventory = async (knexInstance, dbType = DB_TYPES.DEFAULT) => {
+  const migrationsTable = getMigrationsTableName(dbType);
+  const migrationsDir = getMigrationsDirectory(dbType);
+  const hasTable = await knexInstance.schema.hasTable(migrationsTable);
+  const migrationFiles = await listMigrationFiles(migrationsDir);
+
+  if (!hasTable) {
+    return {
+      hasTable,
+      migrationsTable,
+      migrationsDir,
+      migrationFiles,
+      appliedMigrations: [],
+      appliedNames: [],
+      pendingMigrations: migrationFiles,
+      missingMigrations: [],
+    };
+  }
+
+  const appliedMigrations = await knexInstance(migrationsTable).select('*').orderBy('id', 'asc');
+  const appliedNames = appliedMigrations.map(migration => migration.name);
+  const pendingMigrations = migrationFiles.filter(file => !appliedNames.includes(file));
+  const missingMigrations = appliedNames.filter(name => !migrationFiles.includes(name));
+
+  return {
+    hasTable,
+    migrationsTable,
+    migrationsDir,
+    migrationFiles,
+    appliedMigrations,
+    appliedNames,
+    pendingMigrations,
+    missingMigrations,
+  };
+};
+
+const shouldUseControlledMode = () => process.argv.includes('--allow-missing');
+
 /**
  * Função para carregar o knexfile com suporte a múltiplos bancos de dados
  * @param {string} dbType - Tipo de banco de dados (default ou clients)
@@ -153,22 +210,79 @@ const runMigrations = async (dbType = DB_TYPES.DEFAULT) => {
     } catch (migrationError) {
       const msg = migrationError && migrationError.message ? migrationError.message : String(migrationError);
 
-      // Caso especial: diretório de migrações "corrompido" porque existem
-      // entradas na tabela para arquivos que não estão mais presentes neste repo.
-      // Nesse cenário, apenas registramos um aviso e seguimos em frente,
-      // assumindo que não há novas migrações a aplicar neste repositório.
       if (msg.includes('The migration directory is corrupt, the following files are missing')) {
-        console.warn('[migrate-knex-api] Aviso: diretório de migrações considerado corrompido pelo Knex (arquivos ausentes).');
-        console.warn('[migrate-knex-api] Ignorando essa validação e seguindo sem aplicar novas migrações para', dbType);
+        const inventory = await getMigrationInventory(knexInstance, dbType);
+        const allowMissing = shouldUseControlledMode();
+
+        console.warn('[migrate-knex-api] Aviso: diretório de migrações considerado corrompido pelo Knex (arquivos ausentes).', {
+          dbType,
+          missingMigrations: inventory.missingMigrations,
+          pendingMigrations: inventory.pendingMigrations,
+        });
+
+        if (!allowMissing) {
+          await knexInstance.destroy();
+          return {
+            success: false,
+            error: msg,
+            message: `Diretório de migrações inconsistente para banco ${dbType}. Reexecute com --allow-missing para aplicar apenas as migrações novas após reconciliar os arquivos ausentes.`,
+            details: {
+              batchNo: null,
+              migrations: [],
+              dbType,
+              pending: inventory.pendingMigrations,
+              missing: inventory.missingMigrations,
+            }
+          };
+        }
+
+        const controlledConfig = {
+          ...config,
+          migrations: {
+            ...config.migrations,
+            disableMigrationsListValidation: true,
+          },
+        };
+
         await knexInstance.destroy();
+        const controlledKnexInstance = knex(controlledConfig);
+
+        try {
+          [batchNo, log] = await controlledKnexInstance.migrate.latest();
+        } catch (controlledError) {
+          const controlledMessage = controlledError?.message || String(controlledError);
+          console.error('[migrate-knex-api] Erro ao executar migrações em modo controlado:', controlledMessage);
+          await controlledKnexInstance.destroy();
+          return {
+            success: false,
+            error: controlledMessage,
+            message: `Erro ao executar migrações em modo controlado para banco ${dbType}`,
+            details: {
+              batchNo: null,
+              migrations: [],
+              dbType,
+              pending: inventory.pendingMigrations,
+              missing: inventory.missingMigrations,
+            }
+          };
+        }
+
+        await controlledKnexInstance.destroy();
+
         return {
           success: true,
-          message: 'Nenhuma migração aplicada (ignorando validação de arquivos ausentes, tratada como warning).',
-          details: { batchNo: null, migrations: [], dbType }
+          message: `${log.length} migrações aplicadas com sucesso no banco ${dbType} em modo controlado`,
+          details: {
+            batchNo,
+            migrations: log,
+            dbType,
+            pending: inventory.pendingMigrations,
+            missing: inventory.missingMigrations,
+            controlledMode: true,
+          }
         };
       }
 
-      // Se o erro for relacionado à tabela de migrações já existir, podemos tentar novamente
       if (msg.includes('already exists')) {
         console.log('A tabela de migrações já existe. Tentando executar as migrações novamente...');
         try {
@@ -195,11 +309,18 @@ const runMigrations = async (dbType = DB_TYPES.DEFAULT) => {
     
     if (!log || log.length === 0) {
       console.log('Nenhuma migração pendente encontrada.');
+      const inventory = await getMigrationInventory(knexInstance, dbType);
       await knexInstance.destroy();
       return {
         success: true,
         message: 'Nenhuma migração pendente',
-        details: { batchNo, migrations: log || [], dbType }
+        details: {
+          batchNo,
+          migrations: log || [],
+          dbType,
+          pending: inventory.pendingMigrations,
+          missing: inventory.missingMigrations,
+        }
       };
     }
     
@@ -212,7 +333,7 @@ const runMigrations = async (dbType = DB_TYPES.DEFAULT) => {
     return {
       success: true,
       message: `${log.length} migrações aplicadas com sucesso no banco ${dbType}`,
-      details: { batchNo, migrations: log, dbType }
+      details: { batchNo, migrations: log, dbType, controlledMode: false }
     };
     
   } catch (error) {
@@ -283,8 +404,7 @@ const getStatus = async (dbType = DB_TYPES.DEFAULT) => {
     const config = loadKnexConfig(dbType);
     const knexInstance = knex(config);
     
-    // Determinar o nome da tabela de migrações com base no tipo de banco
-    const migrationsTable = dbType === DB_TYPES.CLIENTS ? 'knex_migrations_clients' : 'knex_migrations';
+    const migrationsTable = getMigrationsTableName(dbType);
     
     // Verificar se podemos acessar o banco de dados
     try {
@@ -313,17 +433,9 @@ const getStatus = async (dbType = DB_TYPES.DEFAULT) => {
       console.log(`Tabela ${migrationsTable} não existe. Nenhuma migração foi aplicada ainda.`);
       
       // Verificar os arquivos de migração disponíveis no diretório
-      const migrationsDir = path.resolve(__dirname, dbType === DB_TYPES.CLIENTS ? './knex-clients' : './knex');
-      let pendingMigrations = [];
-      
-      try {
-        pendingMigrations = fs.readdirSync(migrationsDir)
-          .filter(file => file.endsWith('.js'))
-          .sort();
-        console.log(`Encontrados ${pendingMigrations.length} arquivos de migração no diretório ${migrationsDir}`);
-      } catch (err) {
-        console.log(`Diretório de migrações ${migrationsDir} vazio ou não existe`);
-      }
+      const migrationsDir = getMigrationsDirectory(dbType);
+      const pendingMigrations = await listMigrationFiles(migrationsDir);
+      console.log(`Encontrados ${pendingMigrations.length} arquivos de migração no diretório ${migrationsDir}`);
       
       await knexInstance.destroy();
       return {
@@ -332,33 +444,19 @@ const getStatus = async (dbType = DB_TYPES.DEFAULT) => {
         details: {
           completed: [],
           pending: pendingMigrations,
+          missing: [],
           dbType
         }
       };
     }
     
-    // Consultar migrações aplicadas diretamente da tabela
-    const appliedMigrations = await knexInstance(migrationsTable).select('*').orderBy('id', 'asc');
-    console.log('Migrações aplicadas encontradas na tabela:', appliedMigrations.length);
+    const inventory = await getMigrationInventory(knexInstance, dbType);
+    console.log('Migrações aplicadas encontradas na tabela:', inventory.appliedMigrations.length);
+    console.log('Arquivos de migração encontrados no diretório:', inventory.migrationFiles.length);
     
-    // Obter arquivos de migração disponíveis no diretório
-    const migrationsDir = path.resolve(__dirname, dbType === DB_TYPES.CLIENTS ? './knex-clients' : './knex');
-    let migrationFiles = [];
-    try {
-      migrationFiles = await fs.readdir(migrationsDir);
-      console.log('Arquivos de migração encontrados no diretório:', migrationFiles.length);
-    } catch (err) {
-      console.error(`Erro ao ler diretório de migrações ${migrationsDir}:`, err);
-    }
-    
-    // Determinar migrações pendentes (arquivos que não estão na tabela)
-    const appliedNames = appliedMigrations.map(m => m.name);
-    const pendingMigrations = migrationFiles.filter(file => 
-      file.endsWith('.js') && !appliedNames.includes(file)
-    );
-    
-    console.log('Migrações concluídas:', appliedMigrations.length);
-    console.log('Migrações pendentes:', pendingMigrations.length);
+    console.log('Migrações concluídas:', inventory.appliedMigrations.length);
+    console.log('Migrações pendentes:', inventory.pendingMigrations.length);
+    console.log('Migrações ausentes no diretório:', inventory.missingMigrations.length);
     
     await knexInstance.destroy();
     
@@ -366,8 +464,9 @@ const getStatus = async (dbType = DB_TYPES.DEFAULT) => {
       success: true,
       message: `Status das migrações obtido com sucesso para banco ${dbType}`,
       details: {
-        completed: appliedMigrations.map(m => m.name),
-        pending: pendingMigrations,
+        completed: inventory.appliedNames,
+        pending: inventory.pendingMigrations,
+        missing: inventory.missingMigrations,
         dbType
       }
     };

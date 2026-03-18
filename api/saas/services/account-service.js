@@ -129,9 +129,34 @@ const updateAccount = async (id, { social_name, name, email, phone, product_id, 
  */
 const deleteAccount = async (id) => {
   const knex = getDbConnection();
-  await getAccountById(id);
-  await knex('account').where({ id }).delete();
-  return true;
+  const existingAccount = await getAccountById(id);
+
+  const updatePayload = {
+    is_deleted: true,
+    updated_at: knex.fn.now(),
+  };
+
+  if (Object.prototype.hasOwnProperty.call(existingAccount || {}, 'deleted_at')) {
+    updatePayload.deleted_at = knex.fn.now();
+  }
+
+  console.info('[deleteAccount] soft delete started', {
+    accountId: id,
+    updatePayload,
+  });
+
+  const [updatedAccount] = await knex('account')
+    .where({ id })
+    .update(updatePayload)
+    .returning('*');
+
+  console.info('[deleteAccount] soft delete completed', {
+    accountId: id,
+    isDeleted: updatedAccount?.is_deleted ?? null,
+    deletedAt: updatedAccount?.deleted_at ?? null,
+  });
+
+  return updatedAccount;
 };
 
 // Retorna contexto de acesso do usuário (admin ou não) usando user_access_profiles
