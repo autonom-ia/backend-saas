@@ -58,19 +58,19 @@ const getProductById = async (id) => {
 
 /**
  * Cria um novo produto
- * A partir do domínio informado, localiza a company correspondente e preenche company_id.
+ * A partir do subdomínio informado, localiza a company correspondente e preenche company_id.
  * @param {Object} productData - Dados do produto
- * @param {string} productData.domain - Domínio associado à empresa do produto
+ * @param {string} productData.subdomain - Subdomínio associado à empresa do produto
  * @returns {Promise<Object>} Produto criado
  */
-const createProduct = async ({ name, description, product_type_id, domain, conversation_funnel_id, subdomain, is_approved }) => {
+const createProduct = async ({ name, description, product_type_id, conversation_funnel_id, subdomain, is_approved }) => {
   const knex = getDbConnection();
 
   let companyId = null;
-  if (domain) {
-    const company = await knex('company').where({ domain }).first();
+  if (subdomain) {
+    const company = await knex('company').where({ domain: subdomain }).first();
     if (!company) {
-      throw new Error(`Empresa não encontrada para o domínio: ${domain}`);
+      throw new Error(`Empresa não encontrada para o subdomínio: ${subdomain}`);
     }
     companyId = company.id;
   }

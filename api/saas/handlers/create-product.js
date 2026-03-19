@@ -23,7 +23,7 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    const { name, description, product_type_id, domain, conversation_funnel_id, subdomain, is_approved } = requestBody;
+    const { name, description, product_type_id, conversation_funnel_id, subdomain, is_approved } = requestBody;
 
     // Validação dos campos obrigatórios
     if (!name) {
@@ -37,11 +37,11 @@ exports.handler = withCors(async (event, context) => {
       );
     }
 
-    if (!domain) {
+    if (!subdomain) {
       return errorResponse(
         {
           success: false,
-          message: "Domínio é obrigatório para criar o produto",
+          message: "Subdomínio é obrigatório para criar o produto",
         },
         400,
         event
@@ -54,7 +54,6 @@ exports.handler = withCors(async (event, context) => {
       name,
       description,
       product_type_id,
-      domain,
       conversation_funnel_id,
       subdomain,
       is_approved,
