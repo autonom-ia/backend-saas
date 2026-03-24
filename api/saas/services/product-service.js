@@ -58,29 +58,25 @@ const getProductById = async (id) => {
 
 /**
  * Cria um novo produto
- * A partir do subdomínio informado, localiza a company correspondente e preenche company_id.
  * @param {Object} productData - Dados do produto
- * @param {string} productData.subdomain - Subdomínio associado à empresa do produto
+ * @param {string} productData.name - Nome do produto
+ * @param {string} productData.description - Descrição do produto
+ * @param {string} productData.product_type_id - ID do tipo de produto
+ * @param {string} productData.conversation_funnel_id - ID do funil de conversa
+ * @param {string} productData.subdomain - Subdomínio do produto (livre, sem validação)
+ * @param {string} productData.company_id - ID da empresa (obrigatório)
+ * @param {boolean} productData.is_approved - Se o produto está aprovado
  * @returns {Promise<Object>} Produto criado
  */
-const createProduct = async ({ name, description, product_type_id, conversation_funnel_id, subdomain, is_approved }) => {
+const createProduct = async ({ name, description, product_type_id, conversation_funnel_id, subdomain, company_id, is_approved }) => {
   const knex = getDbConnection();
-
-  let companyId = null;
-  if (subdomain) {
-    const company = await knex('company').where({ domain: subdomain }).first();
-    if (!company) {
-      throw new Error(`Empresa não encontrada para o subdomínio: ${subdomain}`);
-    }
-    companyId = company.id;
-  }
   
   const [newProduct] = await knex('product')
     .insert({
       name,
       description,
       product_type_id: product_type_id || null,
-      company_id: companyId,
+      company_id: company_id || null,
       conversation_funnel_id: conversation_funnel_id || null,
       subdomain: typeof subdomain !== 'undefined' ? subdomain : null,
       is_approved: typeof is_approved !== 'undefined' ? !!is_approved : false,
