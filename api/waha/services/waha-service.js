@@ -103,6 +103,51 @@ async function getWahaClient(accountId) {
   return client;
 }
 
+function extractWahaErrorMessages(err) {
+  const responseData = err?.response?.data;
+  const messages = [
+    responseData?.message,
+    responseData?.exception?.message,
+    responseData?.error,
+    err?.message,
+  ];
+
+  return messages
+    .filter((value) => typeof value === 'string' && String(value).trim())
+    .map((value) => String(value).toLowerCase());
+}
+
+function isWahaAppAlreadyExistsError(err, appId) {
+  const messages = extractWahaErrorMessages(err);
+  if (!messages.length) {
+    return false;
+  }
+
+  const hasAlreadyExistsMessage = messages.some(
+    (message) => message.includes('app with id') && message.includes('already exists'),
+  );
+
+  if (!hasAlreadyExistsMessage) {
+    return false;
+  }
+
+  const normalizedAppId = String(appId || '').toLowerCase();
+  if (!normalizedAppId) {
+    return true;
+  }
+
+  return messages.some((message) => message.includes(normalizedAppId));
+}
+
+function normalizeInboxName(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
 async function getInboxForAccount(accountId, inboxId) {
   const db = getDbConnection();
   const inbox = await db('inbox')
@@ -420,6 +465,7 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
     required: false,
     aliases: ['CHATWOOT_INBOX'],
   });
+  let shouldIgnoreAccountInboxParameter = false;
 
   const whatsappApiUrl = await getParameterValue(accountId, 'whatsapp-api-url', {
     required: true,
@@ -563,22 +609,39 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
             });
 
             if (inboxRow && inboxRow.id) {
-              chatwootInboxId = inboxRow.id;
-              existingInboxParam = String(chatwootInboxId);
-              inboxResp = {
-                id: inboxRow.id,
-                name: inboxRow.name,
-                channel_id: inboxRow.channel_id,
-                account_id: inboxRow.account_id,
-              };
+              const normalizedInboxRowName = normalizeInboxName(inboxRow.name);
+              const isSameInboxName = normalizedInboxRowName === normalizedInbox;
 
-              console.log('[Waha.syncWhatsappEnvironment] Reusing Chatwoot inbox found via DB/channel_api webhook', {
-                accountId,
-                inboxId,
-                chatwootAccountId,
-                chatwootInboxId,
-                instanceName,
-              });
+              if (!isSameInboxName) {
+                shouldIgnoreAccountInboxParameter = true;
+                console.warn('[Waha.syncWhatsappEnvironment] Found inbox via webhook, but name differs from current instance. Will create a new Chatwoot inbox.', {
+                  accountId,
+                  inboxId,
+                  chatwootAccountId,
+                  channelId: channelRow.id,
+                  currentInstanceName: inboxName,
+                  foundInboxName: inboxRow.name,
+                });
+              }
+
+              if (isSameInboxName) {
+                chatwootInboxId = inboxRow.id;
+                existingInboxParam = String(chatwootInboxId);
+                inboxResp = {
+                  id: inboxRow.id,
+                  name: inboxRow.name,
+                  channel_id: inboxRow.channel_id,
+                  account_id: inboxRow.account_id,
+                };
+
+                console.log('[Waha.syncWhatsappEnvironment] Reusing Chatwoot inbox found via DB/channel_api webhook', {
+                  accountId,
+                  inboxId,
+                  chatwootAccountId,
+                  chatwootInboxId,
+                  instanceName,
+                });
+              }
             }
           }
         } catch (dbLookupErr) {
@@ -602,6 +665,10 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
           await chatwootDb.destroy();
         } catch {}
       }
+    }
+
+    if (shouldIgnoreAccountInboxParameter) {
+      existingInboxParam = null;
     }
 
     if (existingInboxParam) {
@@ -837,17 +904,25 @@ async function syncWhatsappEnvironment(accountId, inboxId) {
     });
     await wahaClient.post('/api/apps', appBody);
   } catch (err) {
-    const status = err && err.response && err.response.status;
-    const responseData = err && err.response && err.response.data;
-    console.error('[Waha.syncWhatsappEnvironment] Failed to create WAHA app', {
-      accountId,
-      inboxId,
-      appId,
-      message: err && err.message,
-      status,
-      responseData,
-    });
-    throw err;
+    if (isWahaAppAlreadyExistsError(err, appId)) {
+      console.warn('[Waha.syncWhatsappEnvironment] WAHA app already exists; continuing with existing app', {
+        accountId,
+        inboxId,
+        appId,
+      });
+    } else {
+      const status = err && err.response && err.response.status;
+      const responseData = err && err.response && err.response.data;
+      console.error('[Waha.syncWhatsappEnvironment] Failed to create WAHA app', {
+        accountId,
+        inboxId,
+        appId,
+        message: err && err.message,
+        status,
+        responseData,
+      });
+      throw err;
+    }
   }
 
   return {

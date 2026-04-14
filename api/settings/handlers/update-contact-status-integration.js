@@ -1,6 +1,7 @@
 const { success, error } = require('../utils/response');
 const { getDbConnection, closeDbConnection } = require('../utils/database');
 const { requireInternalToken } = require('../utils/internal-auth');
+const { updateCampaignInboxDispatchFromContact } = require('../services/campaign-inbox-service');
 
 /**
  * Handler para atualizar o status (external_status) de um contato via token de integração
@@ -15,7 +16,7 @@ module.exports.handler = async (event) => {
     requireInternalToken(event);
 
     const body = JSON.parse(event.body || '{}');
-    const { contact_id, status } = body;
+    const { contact_id, status, inbox_id, inboxId } = body;
 
     if (!contact_id) {
       return error('Campo contact_id é obrigatório no corpo da requisição', 400);
@@ -27,17 +28,30 @@ module.exports.handler = async (event) => {
 
     db = getDbConnection();
 
+    const updatePayload = {
+      external_status: status,
+      updated_at: db.fn.now(),
+    };
+
+    if (inbox_id || inboxId) {
+      updatePayload.inbox_id = inbox_id || inboxId;
+    }
+
     const [updatedContact] = await db('contact')
       .where({ id: contact_id })
-      .update({
-        external_status: status,
-        updated_at: db.fn.now(),
-      })
+      .update(updatePayload)
       .returning('*');
 
     if (!updatedContact) {
       return error('Contato não encontrado', 404);
     }
+
+    await updateCampaignInboxDispatchFromContact({
+      db,
+      contactId: updatedContact.id,
+      inboxId: inbox_id || inboxId || updatedContact.inbox_id,
+      status,
+    });
 
     return success({
       message: 'Status do contato atualizado com sucesso',

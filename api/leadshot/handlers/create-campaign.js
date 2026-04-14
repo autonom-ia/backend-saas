@@ -10,13 +10,27 @@ exports.handler = async (event) => {
       return errorResponse({ success: false, message: 'JSON inválido' }, 400, event);
     }
 
-    const { name, description, template_message_id, account_id } = body || {};
+    const {
+      name,
+      description,
+      template_message_id,
+      account_id,
+      inbox_ids,
+      use_all_inboxes,
+    } = body || {};
 
     if (!name || !account_id) {
       return errorResponse({ success: false, message: 'Campos obrigatórios: name, account_id' }, 400, event);
     }
 
-    const created = await createCampaign({ name, description: description || null, template_message_id: template_message_id || null, account_id });
+    const created = await createCampaign({
+      name,
+      description: description || null,
+      template_message_id: template_message_id || null,
+      account_id,
+      inbox_ids: Array.isArray(inbox_ids) ? inbox_ids : [],
+      use_all_inboxes: use_all_inboxes === true,
+    });
 
     return success({ success: true, data: created }, 201, event);
   } catch (err) {

@@ -3,6 +3,41 @@
  */
 const { getDbConnection } = require('../utils/database');
 const { getCache, invalidateCache } = require('../utils/cache');
+const { updateCampaignInboxDispatchFromContact } = require('./campaign-inbox-service');
+
+const resolveInboxIdFromSessionData = (sessionData) => {
+  return sessionData?.inbox_id || sessionData?.inboxId || null;
+};
+
+const resolveStatusFromSessionData = (sessionData) => {
+  if (typeof sessionData?.status === 'string' && sessionData.status.trim().length > 0) {
+    return sessionData.status;
+  }
+
+  return 'processing';
+};
+
+const updateCampaignInboxForSession = async (db, sessionData, fallbackContactId = null) => {
+  const contactId = sessionData?.contact_id || fallbackContactId;
+
+  if (!contactId) {
+    return;
+  }
+
+  try {
+    await updateCampaignInboxDispatchFromContact({
+      db,
+      contactId,
+      inboxId: resolveInboxIdFromSessionData(sessionData),
+      status: resolveStatusFromSessionData(sessionData),
+    });
+  } catch (campaignInboxError) {
+    console.error('[createUserSession] Erro ao atualizar campaign_inbox', {
+      contactId,
+      error: campaignInboxError,
+    });
+  }
+};
 
 const ensureContactForSession = async (db, params) => {
   if (params.contact_id) {
@@ -95,6 +130,8 @@ const createUserSession = async (sessionData) => {
           .update({ contact_id: contactId })
           .returning('*');
 
+        await updateCampaignInboxForSession(db, sessionData, contactId);
+
         return sessionWithContact || sessionWithName;
       }
 
@@ -111,8 +148,12 @@ const createUserSession = async (sessionData) => {
           .update({ contact_id: contactId })
           .returning('*');
 
+        await updateCampaignInboxForSession(db, sessionData, contactId);
+
         return sessionWithContact || existingSession;
       }
+
+      await updateCampaignInboxForSession(db, sessionData, existingSession.contact_id);
 
       return existingSession;
     }
@@ -192,6 +233,8 @@ const createUserSession = async (sessionData) => {
     if (!createdSession || !createdSession.id) {
       throw new Error('Falha ao obter o ID da sessão criada');
     }
+
+    await updateCampaignInboxForSession(db, sessionData, contactIdForNewSession);
 
     console.log('Sessão criada com sucesso. ID:', createdSession.id);
     

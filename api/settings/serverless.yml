@@ -222,6 +222,16 @@ functions:
           path: Autonomia/Settings/UpdateContactStatusIntegration
           method: post
           cors: true
+
+  getCampaignSendInbox:
+    handler: handlers/get-campaign-send-inbox.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/GetCampaignSendInbox
+          method: post
+          cors: true
   
 package:
   individually: true

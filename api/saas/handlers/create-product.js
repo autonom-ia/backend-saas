@@ -86,6 +86,35 @@ exports.handler = withCors(async (event, context) => {
       // Não interrompe a criação do produto
     }
 
+    // Criar parâmetros do produto baseado nos parâmetros de agente da empresa (company_parameters com scope = agent_config)
+    try {
+      const knex = getDbConnection();
+      const agentConfigParams = await knex("company_parameters")
+        .select("parameter_key", "parameter_value", "parameter_type")
+        .where({
+          company_id: company_id,
+          scope: "agent_config",
+        });
+
+      if (agentConfigParams.length > 0) {
+        const productParamRows = agentConfigParams.map((param) => ({
+          name: param.parameter_key,
+          value: param.parameter_value || "",
+          product_id: newProduct.id,
+          short_description: null,
+          help_text: null,
+          default_value: null,
+        }));
+        await knex("product_parameter").insert(productParamRows);
+      }
+    } catch (agentConfigErr) {
+      console.error(
+        "[create-product] Falha ao copiar agent_config parameters para o novo produto:",
+        agentConfigErr?.message || agentConfigErr
+      );
+      // Não interrompe a criação do produto
+    }
+
     // Criar prompts padrão para o novo produto baseado nos padrões (agent_prompts_standard)
     try {
       const knex = getDbConnection();

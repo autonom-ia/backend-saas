@@ -1,0 +1,1097 @@
+openapi: "3.0.0"
+info:
+  title: "Autonomia SaaS API"
+  version: "1.0.0"
+  description: "Especificação OpenAPI do serviço /backend/api/saas."
+servers:
+  - url: "https://api-saas.autonomia.site"
+    description: "Produção"
+security:
+  - bearerAuth: []
+paths:
+  /Autonomia/Saas/Products:
+    get:
+      tags: [Products]
+      summary: "Listar produtos"
+      operationId: "listProducts"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [Products]
+      summary: "Criar produto"
+      operationId: "createProduct"
+      requestBody:
+        $ref: "#/components/requestBodies/ProductCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/ProductTypes:
+    get:
+      tags: [Products]
+      summary: "Listar tipos de produto"
+      operationId: "listProductTypes"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Products/{productId}:
+    get:
+      tags: [Products]
+      summary: "Obter produto por ID"
+      operationId: "getProduct"
+      parameters:
+        - $ref: "#/components/parameters/productIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [Products]
+      summary: "Atualizar produto"
+      operationId: "updateProduct"
+      parameters:
+        - $ref: "#/components/parameters/productIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/ProductUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [Products]
+      summary: "Remover produto"
+      operationId: "deleteProduct"
+      parameters:
+        - $ref: "#/components/parameters/productIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/KnowledgeDocuments:
+    get:
+      tags: [KnowledgeDocuments]
+      summary: "Listar documentos de conhecimento"
+      operationId: "listKnowledgeDocuments"
+      parameters:
+        - $ref: "#/components/parameters/accountIdQueryOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [KnowledgeDocuments]
+      summary: "Criar documento de conhecimento"
+      operationId: "createKnowledgeDocument"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/KnowledgeDocuments/{documentId}:
+    get:
+      tags: [KnowledgeDocuments]
+      summary: "Obter documento de conhecimento"
+      operationId: "getKnowledgeDocument"
+      parameters:
+        - $ref: "#/components/parameters/documentIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [KnowledgeDocuments]
+      summary: "Atualizar documento de conhecimento"
+      operationId: "updateKnowledgeDocument"
+      parameters:
+        - $ref: "#/components/parameters/documentIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [KnowledgeDocuments]
+      summary: "Excluir documento de conhecimento"
+      operationId: "deleteKnowledgeDocument"
+      parameters:
+        - $ref: "#/components/parameters/documentIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/KnowledgeDocuments/{documentId}/sync:
+    post:
+      tags: [KnowledgeDocuments]
+      summary: "Sincronizar documento com processador externo"
+      operationId: "syncKnowledgeDocument"
+      parameters:
+        - $ref: "#/components/parameters/documentIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/Accounts:
+    get:
+      tags: [Accounts]
+      summary: "Listar contas"
+      operationId: "listAccounts"
+      parameters:
+        - $ref: "#/components/parameters/productIdQueryOptional"
+        - $ref: "#/components/parameters/domainQueryOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [Accounts]
+      summary: "Criar conta"
+      operationId: "createAccount"
+      requestBody:
+        $ref: "#/components/requestBodies/AccountCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/UserPermissions:
+    get:
+      tags: [Accounts]
+      summary: "Obter permissões do usuário"
+      operationId: "getUserPermissions"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Accounts/{accountId}:
+    get:
+      tags: [Accounts]
+      summary: "Obter conta por ID"
+      operationId: "getAccount"
+      parameters:
+        - $ref: "#/components/parameters/accountIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [Accounts]
+      summary: "Atualizar conta"
+      operationId: "updateAccount"
+      parameters:
+        - $ref: "#/components/parameters/accountIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/AccountUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [Accounts]
+      summary: "Excluir conta"
+      operationId: "deleteAccount"
+      parameters:
+        - $ref: "#/components/parameters/accountIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Accounts/CompleteSubscription:
+    post:
+      tags: [Accounts]
+      summary: "Completar assinatura da conta"
+      operationId: "completeAccountSubscription"
+      requestBody:
+        $ref: "#/components/requestBodies/CompleteSubscriptionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Accounts/{accountId}/CancelSubscription:
+    post:
+      tags: [Accounts]
+      summary: "Cancelar assinatura da conta"
+      operationId: "cancelAccountSubscription"
+      parameters:
+        - $ref: "#/components/parameters/accountIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/ProductParameters:
+    get:
+      tags: [ProductParameters]
+      summary: "Listar parâmetros de produto"
+      operationId: "listProductParameters"
+      parameters:
+        - $ref: "#/components/parameters/productIdQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [ProductParameters]
+      summary: "Criar parâmetro de produto"
+      operationId: "createProductParameter"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/ProductParameters/{parameterId}:
+    get:
+      tags: [ProductParameters]
+      summary: "Obter parâmetro de produto"
+      operationId: "getProductParameter"
+      parameters:
+        - $ref: "#/components/parameters/parameterIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [ProductParameters]
+      summary: "Atualizar parâmetro de produto"
+      operationId: "updateProductParameter"
+      parameters:
+        - $ref: "#/components/parameters/parameterIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [ProductParameters]
+      summary: "Excluir parâmetro de produto"
+      operationId: "deleteProductParameter"
+      parameters:
+        - $ref: "#/components/parameters/parameterIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/ProductParametersStandard:
+    get:
+      tags: [ProductParameters]
+      summary: "Listar parâmetros padrão de produto"
+      operationId: "listProductParametersStandard"
+      parameters:
+        - $ref: "#/components/parameters/visibleOnboardingQueryOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Products/{productId}/ParametersOnboarding:
+    get:
+      tags: [ProductParameters]
+      summary: "Parâmetros de produto para onboarding"
+      operationId: "getProductParametersForOnboarding"
+      parameters:
+        - $ref: "#/components/parameters/productIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/AgentPrompts:
+    get:
+      tags: [AgentPrompts]
+      summary: "Listar prompts de agente"
+      operationId: "listAgentPrompts"
+      parameters:
+        - $ref: "#/components/parameters/productIdQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [AgentPrompts]
+      summary: "Criar prompt de agente"
+      operationId: "createAgentPrompt"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/AgentPrompts/{promptId}:
+    get:
+      tags: [AgentPrompts]
+      summary: "Obter prompt de agente"
+      operationId: "getAgentPrompt"
+      parameters:
+        - $ref: "#/components/parameters/promptIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [AgentPrompts]
+      summary: "Atualizar prompt de agente"
+      operationId: "updateAgentPrompt"
+      parameters:
+        - $ref: "#/components/parameters/promptIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [AgentPrompts]
+      summary: "Excluir prompt de agente"
+      operationId: "deleteAgentPrompt"
+      parameters:
+        - $ref: "#/components/parameters/promptIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/AgentPrompts/{promptId}/reactivate:
+    post:
+      tags: [AgentPrompts]
+      summary: "Reativar prompt de agente"
+      operationId: "reactivateAgentPrompt"
+      parameters:
+        - $ref: "#/components/parameters/promptIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/AgentPromptsStandard:
+    get:
+      tags: [AgentPrompts]
+      summary: "Listar prompts padrão"
+      operationId: "listAgentPromptsStandard"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/AccountParameters:
+    get:
+      tags: [AccountParameters]
+      summary: "Listar parâmetros da conta"
+      operationId: "listAccountParameters"
+      parameters:
+        - $ref: "#/components/parameters/accountIdQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [AccountParameters]
+      summary: "Criar parâmetro da conta"
+      operationId: "createAccountParameter"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/AccountParameters/{parameterId}:
+    get:
+      tags: [AccountParameters]
+      summary: "Obter parâmetro da conta"
+      operationId: "getAccountParameter"
+      parameters:
+        - $ref: "#/components/parameters/parameterIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [AccountParameters]
+      summary: "Atualizar parâmetro da conta"
+      operationId: "updateAccountParameter"
+      parameters:
+        - $ref: "#/components/parameters/parameterIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [AccountParameters]
+      summary: "Excluir parâmetro da conta"
+      operationId: "deleteAccountParameter"
+      parameters:
+        - $ref: "#/components/parameters/parameterIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/AccountParametersStandard:
+    get:
+      tags: [AccountParameters]
+      summary: "Listar parâmetros padrão da conta"
+      operationId: "listAccountParametersStandard"
+      parameters:
+        - $ref: "#/components/parameters/visibleOnboardingQueryOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Accounts/{accountId}/ParametersOnboarding:
+    get:
+      tags: [AccountParameters]
+      summary: "Parâmetros de conta para onboarding"
+      operationId: "getAccountParametersForOnboarding"
+      parameters:
+        - $ref: "#/components/parameters/accountIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/Onboarding/Accounts:
+    post:
+      tags: [Onboarding]
+      summary: "Criar onboarding de conta"
+      operationId: "createAccountOnboarding"
+      requestBody:
+        $ref: "#/components/requestBodies/OnboardingCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/EVS/PartialRegister:
+    post:
+      tags: [EVS]
+      summary: "Registro parcial EVS"
+      operationId: "evsPartialRegister"
+      requestBody:
+        $ref: "#/components/requestBodies/EvsPartialRegisterRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/ConversationFunnels:
+    get:
+      tags: [ConversationFunnels]
+      summary: "Listar funis de conversa"
+      operationId: "listConversationFunnels"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [ConversationFunnels]
+      summary: "Criar funil de conversa"
+      operationId: "createConversationFunnel"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/ConversationFunnels/{funnelId}:
+    get:
+      tags: [ConversationFunnels]
+      summary: "Obter funil de conversa"
+      operationId: "getConversationFunnel"
+      parameters:
+        - $ref: "#/components/parameters/funnelIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [ConversationFunnels]
+      summary: "Atualizar funil de conversa"
+      operationId: "updateConversationFunnel"
+      parameters:
+        - $ref: "#/components/parameters/funnelIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [ConversationFunnels]
+      summary: "Excluir funil de conversa"
+      operationId: "deleteConversationFunnel"
+      parameters:
+        - $ref: "#/components/parameters/funnelIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/ConversationFunnelSteps:
+    get:
+      tags: [ConversationFunnelSteps]
+      summary: "Listar etapas do funil"
+      operationId: "listConversationFunnelSteps"
+      parameters:
+        - $ref: "#/components/parameters/accountIdQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [ConversationFunnelSteps]
+      summary: "Criar etapa do funil"
+      operationId: "createConversationFunnelStep"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/ConversationFunnelSteps/{stepId}:
+    get:
+      tags: [ConversationFunnelSteps]
+      summary: "Obter etapa do funil"
+      operationId: "getConversationFunnelStep"
+      parameters:
+        - $ref: "#/components/parameters/stepIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [ConversationFunnelSteps]
+      summary: "Atualizar etapa do funil"
+      operationId: "updateConversationFunnelStep"
+      parameters:
+        - $ref: "#/components/parameters/stepIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [ConversationFunnelSteps]
+      summary: "Excluir etapa do funil"
+      operationId: "deleteConversationFunnelStep"
+      parameters:
+        - $ref: "#/components/parameters/stepIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/ConversationFunnelStepMessages:
+    get:
+      tags: [ConversationFunnelStepMessages]
+      summary: "Listar mensagens das etapas do funil"
+      operationId: "listConversationFunnelStepMessages"
+      parameters:
+        - $ref: "#/components/parameters/accountIdQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [ConversationFunnelStepMessages]
+      summary: "Criar mensagem da etapa do funil"
+      operationId: "createConversationFunnelStepMessage"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/ConversationFunnelStepMessages/{messageId}:
+    get:
+      tags: [ConversationFunnelStepMessages]
+      summary: "Obter mensagem da etapa do funil"
+      operationId: "getConversationFunnelStepMessage"
+      parameters:
+        - $ref: "#/components/parameters/messageIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [ConversationFunnelStepMessages]
+      summary: "Atualizar mensagem da etapa do funil"
+      operationId: "updateConversationFunnelStepMessage"
+      parameters:
+        - $ref: "#/components/parameters/messageIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [ConversationFunnelStepMessages]
+      summary: "Excluir mensagem da etapa do funil"
+      operationId: "deleteConversationFunnelStepMessage"
+      parameters:
+        - $ref: "#/components/parameters/messageIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/Inboxes:
+    get:
+      tags: [Inboxes]
+      summary: "Listar inboxes"
+      operationId: "listInboxes"
+      parameters:
+        - $ref: "#/components/parameters/accountIdQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    post:
+      tags: [Inboxes]
+      summary: "Criar inbox"
+      operationId: "createInbox"
+      requestBody:
+        $ref: "#/components/requestBodies/InboxCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success201"
+  /Autonomia/Saas/Inboxes/{inboxId}:
+    get:
+      tags: [Inboxes]
+      summary: "Obter inbox"
+      operationId: "getInbox"
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    put:
+      tags: [Inboxes]
+      summary: "Atualizar inbox"
+      operationId: "updateInbox"
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/InboxUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+    delete:
+      tags: [Inboxes]
+      summary: "Excluir inbox"
+      operationId: "deleteInbox"
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Inboxes/{inboxId}/PublicCreateSession:
+    post:
+      tags: [InboxesPublic]
+      summary: "Criar sessão WAHA pública"
+      operationId: "publicCreateWahaSession"
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Inboxes/{inboxId}/PublicConnectionState:
+    get:
+      tags: [InboxesPublic]
+      summary: "Consultar estado de conexão WAHA (público)"
+      operationId: "publicGetWahaConnectionState"
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+        - $ref: "#/components/parameters/tokenQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Inboxes/{inboxId}/PublicSyncWhatsappEnvironment:
+    post:
+      tags: [InboxesPublic]
+      summary: "Sincronizar ambiente WhatsApp (público)"
+      operationId: "publicSyncWhatsappEnvironment"
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/GenericCreateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Inboxes/{inboxId}/ConnectionLink:
+    post:
+      tags: [Inboxes]
+      summary: "Gerar link de conexão da inbox"
+      operationId: "generateInboxConnectionLink"
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/InboxConnectionToken/{token}:
+    get:
+      tags: [InboxesPublic]
+      summary: "Obter dados por token de conexão da inbox"
+      operationId: "getInboxConnectionToken"
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/tokenPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/Inboxes/{inboxId}/NotifyConnectionLink:
+    post:
+      tags: [Inboxes]
+      summary: "Notificar link de conexão da inbox"
+      operationId: "notifyInboxConnectionLink"
+      parameters:
+        - $ref: "#/components/parameters/inboxIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/NotifyConnectionLinkRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/KanbanItems:
+    get:
+      tags: [Kanban]
+      summary: "Listar itens de kanban"
+      operationId: "listKanbanItems"
+      parameters:
+        - $ref: "#/components/parameters/accountIdQueryOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+  /Autonomia/Saas/KanbanItems/{itemId}:
+    put:
+      tags: [Kanban]
+      summary: "Atualizar item de kanban"
+      operationId: "updateKanbanItem"
+      parameters:
+        - $ref: "#/components/parameters/itemIdPath"
+      requestBody:
+        $ref: "#/components/requestBodies/KanbanUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/Webhooks/n8n:
+    post:
+      tags: [Webhooks]
+      summary: "Webhook n8n"
+      operationId: "n8nWebhook"
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/WebhookN8nRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+  /Autonomia/Saas/UserSessionAgentMessages/Stats:
+    get:
+      tags: [Stats]
+      summary: "Estatísticas de mensagens de sessão do agente"
+      operationId: "getUserSessionAgentMessageStats"
+      parameters:
+        - $ref: "#/components/parameters/accountIdQueryRequired"
+        - $ref: "#/components/parameters/startDateQueryRequired"
+        - $ref: "#/components/parameters/endDateQueryRequired"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success200"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    productIdPath:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+    documentIdPath:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+    accountIdPath:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+    parameterIdPath:
+      name: parameterId
+      in: path
+      required: true
+      schema:
+        type: string
+    promptIdPath:
+      name: promptId
+      in: path
+      required: true
+      schema:
+        type: string
+    funnelIdPath:
+      name: funnelId
+      in: path
+      required: true
+      schema:
+        type: string
+    stepIdPath:
+      name: stepId
+      in: path
+      required: true
+      schema:
+        type: string
+    messageIdPath:
+      name: messageId
+      in: path
+      required: true
+      schema:
+        type: string
+    inboxIdPath:
+      name: inboxId
+      in: path
+      required: true
+      schema:
+        type: string
+    tokenPath:
+      name: token
+      in: path
+      required: true
+      schema:
+        type: string
+    itemIdPath:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: string
+
+    productIdQueryOptional:
+      name: productId
+      in: query
+      required: false
+      schema:
+        type: string
+    productIdQueryRequired:
+      name: productId
+      in: query
+      required: true
+      schema:
+        type: string
+    domainQueryOptional:
+      name: domain
+      in: query
+      required: false
+      schema:
+        type: string
+    accountIdQueryOptional:
+      name: accountId
+      in: query
+      required: false
+      schema:
+        type: string
+    accountIdQueryRequired:
+      name: accountId
+      in: query
+      required: true
+      schema:
+        type: string
+    visibleOnboardingQueryOptional:
+      name: visibleOnboarding
+      in: query
+      required: false
+      schema:
+        type: boolean
+    tokenQueryRequired:
+      name: token
+      in: query
+      required: true
+      schema:
+        type: string
+    startDateQueryRequired:
+      name: startDate
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+    endDateQueryRequired:
+      name: endDate
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+
+  requestBodies:
+    GenericCreateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    GenericUpdateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    ProductCreateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, subdomain]
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              product_type_id:
+                type: string
+              conversation_funnel_id:
+                type: string
+              subdomain:
+                type: string
+              is_approved:
+                type: boolean
+              company_id:
+                type: string
+            additionalProperties: true
+    ProductUpdateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              product_type_id:
+                type: string
+              conversation_funnel_id:
+                type: string
+              subdomain:
+                type: string
+              is_approved:
+                type: boolean
+            additionalProperties: true
+    AccountCreateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+              email:
+                type: string
+                format: email
+            additionalProperties: true
+    AccountUpdateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    CompleteSubscriptionRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              accountId:
+                type: string
+              planId:
+                type: string
+            additionalProperties: true
+    OnboardingCreateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    EvsPartialRegisterRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    InboxCreateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    InboxUpdateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    NotifyConnectionLinkRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+                format: email
+            additionalProperties: true
+    KanbanUpdateRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    WebhookN8nRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+
+  responses:
+    Success200:
+      description: "Operação executada com sucesso."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiEnvelope"
+    Success201:
+      description: "Recurso criado com sucesso."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiEnvelope"
+    BadRequest400:
+      description: "Requisição inválida."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized401:
+      description: "Não autorizado."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InternalError500:
+      description: "Erro interno."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    ApiEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operação realizada com sucesso"
+        data:
+          nullable: true
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+            - type: string
+            - type: number
+            - type: boolean
+      required: [success]
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Erro ao processar requisição"
+        error:
+          type: string
+      required: [success, message]

@@ -201,6 +201,27 @@ functions:
             allowCredentials: true
           authorizer: ${self:custom.authorizer}
 
+  updateCampaign:
+    handler: handlers/update-campaign.handler
+    events:
+      - http:
+          path: Autonomia/Leadshot/Campaigns/{campaignId}
+          method: put
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
+          request:
+            parameters:
+              paths:
+                campaignId: true
+          authorizer: ${self:custom.authorizer}
+
   # Campaign Contact Import System
   uploadCampaignContacts:
     handler: handlers/upload-campaign-contacts.handler
