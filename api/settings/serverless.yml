@@ -213,6 +213,26 @@ functions:
           method: post
           cors: true
 
+  createAccountInteractionInternal:
+    handler: handlers/create-account-interaction-internal.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/Internal/AccountInteractions
+          method: post
+          cors: true
+
+  getAccountInteractionStatsInternal:
+    handler: handlers/get-account-interaction-stats-internal.handler
+    layers:
+      - { Ref: CommonLibsLambdaLayer }
+    events:
+      - http:
+          path: Autonomia/Settings/Internal/AccountInteractions/Stats
+          method: get
+          cors: true
+
   updateContactStatusIntegration:
     handler: handlers/update-contact-status-integration.handler
     layers:
