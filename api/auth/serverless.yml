@@ -144,6 +144,9 @@ resources:
           PasswordPolicy:
             MinimumLength: 8
             RequireLowercase: true
+            RequireUppercase: true
+            RequireNumbers: true
+            RequireSymbols: true
         AutoVerifiedAttributes:
           - email
 

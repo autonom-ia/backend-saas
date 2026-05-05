@@ -97,6 +97,10 @@ provider:
     FINANCIAL_SERVICE_CREATE_SUBSCRIPTION_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-createAccountSubscription
     FINANCIAL_SERVICE_ASSOCIATE_ONBOARDING_FUNCTION: fin-account-subscriptions-${self:custom.financialServiceStage}-associateOnboardingData
     INTERNAL_INTEGRATION_TOKEN: ${ssm:/autonomia/${self:provider.stage}/integration/internal-token, ''}
+    # Se preenchido, este token (header X-Internal-Integration-Token) vale só para esta rota LP; senão usa INTERNAL_INTEGRATION_TOKEN
+    SETTINGS_ONBOARDING_INTERNAL_TOKEN: ${ssm:/autonomia/${self:provider.stage}/saas/settings-onboarding-internal-token, ''}
+    # Bearer opcional para chamadas ao financial nesta rota (quando a LP não envia Authorization)
+    SETTINGS_ONBOARDING_FINANCIAL_BEARER_TOKEN: ${ssm:/autonomia/${self:provider.stage}/saas/settings-onboarding-financial-bearer, ''}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -614,6 +618,18 @@ functions:
           cors: true
           authorizer: ${self:custom.authorizer}
 
+  # Fora do provider.vpc: RDS acessível publicamente; em VPC, Lambda.invoke ao financial dava ETIMEDOUT.
+  settingsOnboardingWithCheckout:
+    handler: handlers/settings-onboarding-with-checkout.handler
+    description: LP — token interno (X-Internal-Integration-Token); sem Cognito. Onboarding + financial opcional.
+    timeout: 60
+    events:
+      - http:
+          path: Autonomia/Saas/Settings/Accounts/OnboardingWithCheckout
+          method: post
+          cors: true
+    vpc: null
+
   evsPartialRegister:
     handler: handlers/evs-partial-register.handler
     events:
@@ -1041,3 +1057,18 @@ functions:
                 startDate: true
                 endDate: true
           authorizer: ${self:custom.authorizer}
+
+  getUserSessionAgentMessageStatsInternal:
+    handler: handlers/get-user-session-agent-message-stats-internal.handler
+    description: Mesmas stats; auth só X-Internal-Integration-Token (BFF)
+    events:
+      - http:
+          path: Autonomia/Saas/Internal/UserSessionAgentMessages/Stats
+          method: get
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                accountId: true
+                startDate: true
+                endDate: true
