@@ -43,6 +43,11 @@ exports.handler = async (event) => {
     const sessionIdRaw = body.sessionId ?? body.session_id ?? null;
     const sessionId =
       sessionIdRaw != null && String(sessionIdRaw).trim() ? String(sessionIdRaw).trim() : null;
+    const skipInvoiceAssociation =
+      body.skipInvoiceAssociation === true ||
+      body.skip_invoice_association === true ||
+      body.noInvoice === true ||
+      body.no_invoice === true;
 
     if (!productPlanId) {
       return success(
@@ -74,11 +79,21 @@ exports.handler = async (event) => {
 
     const customPrice =
       body.customPrice != null ? body.customPrice : body.custom_price != null ? body.custom_price : null;
+    const appliedDiscountCouponId =
+      body.appliedDiscountCouponId ?? body.applied_discount_coupon_id ?? body.couponId ?? body.coupon_id ?? null;
+    const appliedDiscountCouponCode =
+      body.appliedDiscountCouponCode ??
+      body.applied_discount_coupon_code ??
+      body.couponCode ??
+      body.coupon_code ??
+      null;
     const subBody = {
       accountId: account.id,
       productPlanId,
       customPrice,
       currency: body.currency || 'BRL',
+      ...(appliedDiscountCouponId ? { appliedDiscountCouponId } : {}),
+      ...(appliedDiscountCouponCode ? { appliedDiscountCouponCode } : {}),
     };
     const sub = await createAccountSubscription(subBody, token);
     if (!sub || !sub.id) {
@@ -99,7 +114,7 @@ exports.handler = async (event) => {
 
     const doc = document != null ? String(document).trim() : '';
     let associateResult = null;
-    if (doc || invoiceId) {
+    if (!skipInvoiceAssociation && (doc || invoiceId)) {
       const associateBody = {
         accountId: account.id,
         accountSubscriptionId: sub.id,
