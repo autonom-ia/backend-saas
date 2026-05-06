@@ -746,7 +746,9 @@ functions:
           request:
             parameters:
               querystrings:
-                accountId: true
+                accountId: false
+                conversationFunnelId: false
+                conversation_funnel_id: false
           authorizer: ${self:custom.authorizer}
 
   getConversationFunnelStep:
@@ -807,7 +809,9 @@ functions:
           request:
             parameters:
               querystrings:
-                accountId: true
+                accountId: false
+                conversationFunnelId: false
+                conversation_funnel_id: false
           authorizer: ${self:custom.authorizer}
 
   getConversationFunnelStepMessage:

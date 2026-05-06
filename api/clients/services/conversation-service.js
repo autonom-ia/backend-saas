@@ -1,41 +1,6 @@
-const knex = require('knex');
 const { getDbConnection } = require('../utils/database');
+const { createChatwootDbConnection } = require('../utils/chatwoot-database');
 
-
-async function createChatwootDbConnection(accountId) {
-  try {
-    const db = getDbConnection();
-    const normalizedAccountId = String(accountId || '').trim();
-    if (!normalizedAccountId) {
-      throw new Error('Parâmetro account_id é obrigatório para conexão com o banco do Chatwoot');
-    }
-
-    // host
-    const hostParam = await db('account_parameter')
-      .select('value')
-      .where({ account_id: normalizedAccountId, name: 'chatwoot_db_host' })
-      .first();
-    if (!hostParam || !hostParam.value) throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado`);
-
-    const host = hostParam.value;
-    const port = 5432;
-    const database = 'chatwoot';
-    const user = 'postgres';
-    const password = 'Mfcd62!!Mfcd62!!';
-
-    const chatwootDb = knex({
-      client: 'pg',
-      connection: { host, port, database, user, password, ssl: false },
-      pool: { min: 0, max: 2 }
-    });
-
-    await chatwootDb.raw('SELECT 1');
-    return chatwootDb;
-  } catch (error) {
-    console.error('Erro ao criar conexão com banco de dados do Chatwoot:', error);
-    throw new Error(`Erro ao criar conexão com banco de dados do Chatwoot: ${error.message}`);
-  }
-}
 
 async function getConversations(accountId, productId, startDate, endDate) {
   let chatwootDb;
@@ -123,7 +88,10 @@ async function getConversations(accountId, productId, startDate, endDate) {
       });
     } catch (_) {}
 
-    chatwootDb = await createChatwootDbConnection(normalizedAccountId);
+    chatwootDb = await createChatwootDbConnection(db, {
+      accountId: normalizedAccountId,
+      productId: normalizedProductId,
+    });
 
     const query = `
       select c.id, c.display_id, c.contact_id, c2.name as contact_name, c2.phone_number, c.assignee_id, u."name" as assignee_name, tm2.id as team_id, t.name as team_name, c.inbox_id, i.name as inbox_name, m.manager_id, m.manager_name,

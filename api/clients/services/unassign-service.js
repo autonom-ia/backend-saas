@@ -2,7 +2,11 @@
  * Serviço para desalocar contatos inativos dos atendentes do Chatwoot
  */
 const { getDbConnection, closeDbConnection } = require('../utils/database');
-const knex = require('knex');
+const {
+  createChatwootDbConnection: createConfiguredChatwootDbConnection,
+  getAccountIdByPrefix,
+  normalizePrefix,
+} = require('../utils/chatwoot-database');
 // Removido uso de SSM. Os parâmetros agora são obtidos da tabela account_parameter e valores fixos
 
 /**
@@ -26,65 +30,20 @@ const getPrefixParameters = async () => {
 
 
 /**
- * Cria uma conexão com o banco de dados do Chatwoot usando valores fixos e host da tabela account_parameter
- * - host: lido de account_parameter.name = 'chatwoot_db_host' para a conta mapeada por 'prefix-parameter'
- * - port: 5432
- * - database: chatwoot
- * - user: postgres
- * - password: Mfcd62!!Mfcd62!!
- * @param {string} prefix - Prefixo (ex.: 'empresta') utilizado para localizar a conta
- * @returns {Object} - Conexão com o banco de dados
+ * Cria uma conexão com o banco de dados do Chatwoot usando a conta mapeada por prefix-parameter.
  */
 const createChatwootDbConnection = async (prefix) => {
   try {
     const db = getDbConnection();
-    const normalizedPrefix = String(prefix || '').replace(/^\/+|\/+$/g, '');
+    const normalizedPrefix = normalizePrefix(prefix);
     console.log(`Buscando host do Chatwoot para prefixo: ${normalizedPrefix}`);
 
-    // Mapear prefixo -> account_id via account_parameter.name = 'prefix-parameter'
-    const prefixParam = await db('account_parameter')
-      .select('account_id')
-      .where({ name: 'prefix-parameter', value: normalizedPrefix })
-      .first();
-
-    if (!prefixParam) {
-      throw new Error(`Conta não encontrada para o prefixo '${normalizedPrefix}'`);
-    }
-
-    const accountId = prefixParam.account_id;
-
-    // Buscar host do Chatwoot
-    const hostParam = await db('account_parameter')
-      .select('value')
-      .where({ account_id: accountId, name: 'chatwoot_db_host' })
-      .first();
-
-    if (!hostParam || !hostParam.value) {
-      throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado para account_id=${accountId}`);
-    }
-
-    const host = hostParam.value;
-    const port = 5432;
-    const name = 'chatwoot';
-    const user = 'postgres';
-    const password = 'Mfcd62!!Mfcd62!!';
-
-    console.log(`Conectando ao Chatwoot DB em ${host}:${port}/${name} como ${user}`);
-    const chatwootDb = knex({
-      client: 'pg',
-      connection: {
-        host,
-        port,
-        user,
-        password,
-        database: name
-      },
-      pool: { min: 0, max: 1 },
-      acquireConnectionTimeout: 10000
+    const accountId = await getAccountIdByPrefix(db, normalizedPrefix);
+    const chatwootDb = await createConfiguredChatwootDbConnection(db, {
+      accountId,
+      poolMax: 1,
     });
 
-    // Testar conexão
-    await chatwootDb.raw('SELECT 1');
     console.log('Conexão com o banco Chatwoot estabelecida com sucesso!');
     return chatwootDb;
   } catch (error) {

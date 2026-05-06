@@ -11,6 +11,16 @@ const getAllMessagesByAccountId = async (accountId) => {
     .orderBy('m.created_at', 'desc');
 };
 
+// Lista messages filtrando diretamente por conversation_funnel_id
+const getAllMessagesByConversationFunnelId = async (conversationFunnelId) => {
+  const knex = getDbConnection();
+  return knex('conversation_funnel_step_message as m')
+    .join('conversation_funnel_step as s', 's.id', 'm.conversation_funnel_step_id')
+    .where('s.conversation_funnel_id', conversationFunnelId)
+    .select('m.*')
+    .orderBy('m.created_at', 'desc');
+};
+
 // Busca message por ID
 const getMessageById = async (id) => {
   const knex = getDbConnection();
@@ -69,6 +79,7 @@ const deleteMessage = async (id) => {
 
 module.exports = {
   getAllMessagesByAccountId,
+  getAllMessagesByConversationFunnelId,
   getMessageById,
   createMessage,
   updateMessage,

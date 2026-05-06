@@ -60,6 +60,7 @@ provider:
     DB_NAME: ${ssm:/autonomia/${self:provider.stage}/db/name, 'autonomia_db'}
     DB_USER: ${ssm:/autonomia/${self:provider.stage}/db/user, 'autonomia_admin'}
     DB_PASSWORD: ${ssm:/autonomia/${self:provider.stage}/db/password, ''}
+    DB_SSL_ENABLED: ${ssm:/autonomia/${self:provider.stage}/db/ssl-enabled, 'true'}
     # Banco de dados clients
     # Usar sempre /autonomia/${stage}/clients/db/* pois ambos os databases existem em staging e prod
     CLIENTS_DB_HOST: ${ssm:/autonomia/clients/db/host, 'autonomia-prod-db.cde6ocsqc6dk.us-east-1.rds.amazonaws.com'}
@@ -67,6 +68,14 @@ provider:
     CLIENTS_DB_NAME: ${ssm:/autonomia/clients/db/name, 'autonomia_clients'}
     CLIENTS_DB_USER: ${ssm:/autonomia/clients/db/user, 'autonomia_clients_admin'}
     CLIENTS_DB_PASSWORD: ${ssm:/autonomia/clients/db/password, ''}
+    CLIENTS_DB_SSL: ${ssm:/autonomia/clients/db/ssl-enabled, 'true'}
+    # Banco de dados Chatwoot
+    AUTONOMIA_CHATWOOT_DB_HOST: ${ssm:/autonomia/chatwoot/db/host, ''}
+    AUTONOMIA_CHATWOOT_DB_PORT: ${ssm:/autonomia/chatwoot/db/port, '5432'}
+    AUTONOMIA_CHATWOOT_DB_NAME: ${ssm:/autonomia/chatwoot/db/name, 'chatwoot'}
+    AUTONOMIA_CHATWOOT_DB_USER: ${ssm:/autonomia/chatwoot/db/user, 'postgres'}
+    AUTONOMIA_CHATWOOT_DB_PASSWORD: ${ssm:/autonomia/chatwoot/db/password, ''}
+    AUTONOMIA_CHATWOOT_DB_SSL_ENABLED: ${ssm:/autonomia/chatwoot/db/ssl-enabled, 'false'}
     # Redis
     REDIS_HOST: ${ssm:/autonomia/${self:provider.stage}/redis/host, 'autonomia-redis.lfxcgb.ng.0001.use1.cache.amazonaws.com'}
     REDIS_PORT: ${ssm:/autonomia/${self:provider.stage}/redis/port, '6379'}
