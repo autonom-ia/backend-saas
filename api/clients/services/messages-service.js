@@ -1,48 +1,22 @@
 /**
  * Serviço para listar mensagens do Chatwoot
  */
-const knex = require('knex');
 const { getDbConnection } = require('../utils/database');
+const {
+  createChatwootDbConnection: createConfiguredChatwootDbConnection,
+  getAccountIdByPrefix,
+} = require('../utils/chatwoot-database');
 
 /**
- * Cria conexão com o banco do Chatwoot usando host da tabela account_parameter e credenciais fixas
+ * Cria conexão com o banco do Chatwoot usando a configuração da conta mapeada pelo prefixo.
  */
 async function createChatwootDbConnection(prefix) {
   const db = getDbConnection();
-  const normalizedPrefix = String(prefix || '').replace(/^\/+|\/+$/g, '');
+  const accountId = await getAccountIdByPrefix(db, prefix);
 
-  let prefixParam = await db('account_parameter')
-    .select('account_id')
-    .where({ name: 'prefix-parameter', value: normalizedPrefix })
-    .first();
-  if (!prefixParam) {
-    prefixParam = await db('account_parameter')
-      .select('account_id')
-      .where('name', 'prefix-parameter')
-      .andWhere('value', 'like', `%${normalizedPrefix}%`)
-      .first();
-  }
-  if (!prefixParam) throw new Error(`Conta não encontrada para o prefixo '${normalizedPrefix}'`);
-
-  const hostParam = await db('account_parameter')
-    .select('value')
-    .where({ account_id: prefixParam.account_id, name: 'chatwoot_db_host' })
-    .first();
-  if (!hostParam || !hostParam.value) throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado`);
-
-  const host = hostParam.value;
-  const port = 5432;
-  const name = 'chatwoot';
-  const user = 'postgres';
-  const password = 'Mfcd62!!Mfcd62!!';
-
-  const chatwootDb = knex({
-    client: 'pg',
-    connection: { host, port, database: name, user, password },
-    pool: { min: 0, max: 2 }
+  return createConfiguredChatwootDbConnection(db, {
+    accountId,
   });
-  await chatwootDb.raw('SELECT 1');
-  return chatwootDb;
 }
 
 /**

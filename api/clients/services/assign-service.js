@@ -5,6 +5,7 @@
 const axios = require('axios');
 const knex = require('knex');
 const { getDbConnection } = require('../utils/database');
+const { createChatwootDbConnection } = require('../utils/chatwoot-database');
 
 // Configuração da conexão com o banco de dados clients
 const clientsDb = knex({
@@ -21,47 +22,6 @@ const clientsDb = knex({
 });
 
 // Não utilizar mais usuário admin (id=1) como fallback de atribuição
-
-/**
- * Cria conexão com banco de dados do Chatwoot usando account_id
- * @param {number} systemAccountId - ID da conta no sistema
- * @returns {Promise<knex>} - Conexão Knex com o banco do Chatwoot
- */
-async function createChatwootDbConnection(systemAccountId) {
-  try {
-    const db = getDbConnection();
-    console.log(`Buscando configuração do Chatwoot para account_id: ${systemAccountId}`);
-
-    const hostParam = await db('account_parameter')
-      .select('value')
-      .where({ account_id: systemAccountId, name: 'chatwoot_db_host' })
-      .first();
-
-    if (!hostParam || !hostParam.value) {
-      throw new Error(`Parâmetro 'chatwoot_db_host' não encontrado para account_id=${systemAccountId}`);
-    }
-
-    const host = hostParam.value;
-    const port = 5432;
-    const name = 'chatwoot';
-    const user = 'postgres';
-    const password = 'Mfcd62!!Mfcd62!!';
-
-    console.log(`Conectando ao banco Chatwoot em ${host}:${port}/${name}`);
-
-    const chatwootDb = knex({
-      client: 'pg',
-      connection: { host, port, database: name, user, password, ssl: false },
-      pool: { min: 0, max: 2 }
-    });
-
-    await chatwootDb.raw('SELECT 1');
-    return chatwootDb;
-  } catch (error) {
-    console.error('Erro ao criar conexão com banco de dados do Chatwoot:', error);
-    throw new Error(`Erro ao criar conexão com banco de dados do Chatwoot: ${error.message}`);
-  }
-}
 
 async function shouldAssignOnlyActiveUsers(systemAccountId) {
   try {
@@ -116,7 +76,9 @@ async function getLoggedUsersDetails(chatwootAccountId, systemAccountId) {
     if (!onlineIds || onlineIds.length === 0) return [];
 
     // Conectar no banco do Chatwoot usando o account_id
-    chatwootDb = await createChatwootDbConnection(systemAccountId);
+    chatwootDb = await createChatwootDbConnection(getDbConnection(), {
+      accountId: systemAccountId,
+    });
 
     // Buscar nome e email dos usuários online
     const users = await chatwootDb('users')
@@ -543,7 +505,9 @@ const assignContactToAgent = async (chatwootAccountId, systemAccountId, contactI
   let chatwootDb = null;
   try {
     // Criar conexão com o banco de dados do Chatwoot
-    chatwootDb = await createChatwootDbConnection(systemAccountId);
+    chatwootDb = await createChatwootDbConnection(getDbConnection(), {
+      accountId: systemAccountId,
+    });
 
     // 1. Buscar detalhes da conversa com lock pessimista (SELECT FOR UPDATE NOWAIT) para evitar race conditions
     let conversationDetails;

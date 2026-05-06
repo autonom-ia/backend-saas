@@ -11,6 +11,16 @@ const getAllStepsByAccountId = async (accountId) => {
     .orderBy('s.created_at', 'desc');
 };
 
+// Lista steps filtrando diretamente por conversation_funnel_id
+const getAllStepsByConversationFunnelId = async (conversationFunnelId) => {
+  const knex = getDbConnection();
+  return knex('conversation_funnel_step')
+    .where({ conversation_funnel_id: conversationFunnelId })
+    .select('*')
+    .orderBy('order', 'asc')
+    .orderBy('created_at', 'desc');
+};
+
 // Busca step por ID
 const getStepById = async (id) => {
   const knex = getDbConnection();
@@ -104,6 +114,7 @@ const deleteStep = async (id) => {
 
 module.exports = {
   getAllStepsByAccountId,
+  getAllStepsByConversationFunnelId,
   getStepById,
   createStep,
   updateStep,
