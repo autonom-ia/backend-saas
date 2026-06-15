@@ -14,7 +14,90 @@ const resolveStatusFromSessionData = (sessionData) => {
     return sessionData.status;
   }
 
-  return 'processing';
+  return 'delivered';
+};
+
+const getPhoneDigits = (phone) => String(phone || '').replace(/\D/g, '');
+
+const findExistingSessionByPhone = async (db, sessionData) => {
+  console.log(`Verificando se já existe uma sessão para o telefone ${sessionData.phone} na conta ${sessionData.account_id}...`);
+
+  const exactSession = await db('user_session')
+    .where({
+      phone: sessionData.phone,
+      account_id: sessionData.account_id
+    })
+    .first();
+
+  if (exactSession) {
+    return exactSession;
+  }
+
+  const digits = getPhoneDigits(sessionData.phone);
+  if (digits.length < 12) {
+    console.log('Telefone não possui dígitos suficientes para match flexível 4+8; pulando segunda busca', {
+      phone: sessionData.phone,
+      digits,
+    });
+    return null;
+  }
+
+  const prefix = digits.slice(0, 4);
+  const suffix = digits.slice(-8);
+  const cleanedColumn = "regexp_replace(phone, '[^0-9]', '', 'g')";
+
+  console.log('Nenhuma sessão exata encontrada. Tentando match flexível 4+8 dígitos', {
+    accountId: sessionData.account_id,
+    phone: sessionData.phone,
+    prefix,
+    suffix,
+  });
+
+  return db('user_session')
+    .where('account_id', sessionData.account_id)
+    .andWhereRaw(
+      `substring(${cleanedColumn} from 1 for 4) = ? and right(${cleanedColumn}, 8) = ?`,
+      [prefix, suffix],
+    )
+    .orderBy('created_at', 'asc')
+    .first();
+};
+
+const assignIfPresent = (target, source, sourceKey, targetKey = sourceKey) => {
+  if (source[sourceKey] !== undefined && source[sourceKey] !== null && source[sourceKey] !== '') {
+    target[targetKey] = source[sourceKey];
+  }
+};
+
+const assignIntegerIfPresent = (target, source, sourceKey, targetKey = sourceKey) => {
+  if (source[sourceKey] === undefined || source[sourceKey] === null || source[sourceKey] === '') {
+    return;
+  }
+
+  const value = Number(source[sourceKey]);
+  if (Number.isInteger(value)) {
+    target[targetKey] = value;
+  }
+};
+
+const buildExistingSessionUpdate = (existingSession, sessionData, contactId) => {
+  const updatePayload = {};
+
+  assignIfPresent(updatePayload, sessionData, 'name');
+  assignIfPresent(updatePayload, sessionData, 'phone');
+  assignIfPresent(updatePayload, sessionData, 'product_id');
+  assignIfPresent(updatePayload, sessionData, 'message_time');
+  assignIfPresent(updatePayload, sessionData, 'conversation_funnel_step_id');
+  assignIntegerIfPresent(updatePayload, sessionData, 'inbox_id');
+  assignIntegerIfPresent(updatePayload, sessionData, 'inboxId', 'inbox_id');
+  assignIntegerIfPresent(updatePayload, sessionData, 'conversation_id');
+  assignIntegerIfPresent(updatePayload, sessionData, 'conversationId', 'conversation_id');
+
+  updatePayload.contact_id = contactId || existingSession.contact_id || null;
+  updatePayload.last_access = new Date();
+  updatePayload.updated_at = new Date();
+
+  return updatePayload;
 };
 
 const updateCampaignInboxForSession = async (db, sessionData, fallbackContactId = null) => {
@@ -35,6 +118,28 @@ const updateCampaignInboxForSession = async (db, sessionData, fallbackContactId 
     console.error('[createUserSession] Erro ao atualizar campaign_inbox', {
       contactId,
       error: campaignInboxError,
+    });
+  }
+};
+
+const updateContactStatusForSession = async (db, sessionData, fallbackContactId = null) => {
+  const contactId = sessionData?.contact_id || fallbackContactId;
+
+  if (!contactId) {
+    return;
+  }
+
+  try {
+    await db('contact')
+      .where({ id: contactId })
+      .update({
+        external_status: resolveStatusFromSessionData(sessionData),
+        updated_at: db.fn.now(),
+      });
+  } catch (updateError) {
+    console.error('[createUserSession] Erro ao atualizar status do contato', {
+      contactId,
+      error: updateError,
     });
   }
 };
@@ -95,67 +200,38 @@ const createUserSession = async (sessionData) => {
     // Obter conexão com o banco
     const db = getDbConnection();
     
-    // Verificar se já existe uma sessão com o mesmo telefone para a conta especificada
-    console.log(`Verificando se já existe uma sessão para o telefone ${sessionData.phone} na conta ${sessionData.account_id}...`);
-    const existingSession = await db('user_session')
-      .where({
-        'phone': sessionData.phone,
-        'account_id': sessionData.account_id
-      })
-      .first();
+    const existingSession = await findExistingSessionByPhone(db, sessionData);
     
-    // Se já existe uma sessão, atualizar o name se vier no payload e estiver nulo/vazio na base
+    // Se já existe uma sessão, atualiza os dados recebidos e evita criar duplicidade por variação do nono dígito.
     if (existingSession) {
       console.log(`Sessão existente encontrada com ID: ${existingSession.id}`);
-      const hasIncomingName = typeof sessionData.name === 'string' && sessionData.name.trim().length > 0;
-      const storedNameMissing = existingSession.name == null || String(existingSession.name).trim().length === 0;
+      const contactId = await ensureContactForSession(db, {
+        contact_id: sessionData.contact_id || existingSession.contact_id,
+        name: sessionData.name || existingSession.name,
+        phone: sessionData.phone || existingSession.phone,
+        account_id: sessionData.account_id || existingSession.account_id,
+      });
 
-      if (hasIncomingName && storedNameMissing) {
-        console.log('Atualizando name da user_session existente (estava nulo/vazio)...');
-        const [updated] = await db('user_session')
-          .where({ id: existingSession.id })
-          .update({ name: sessionData.name })
-          .returning('*');
+      const updatePayload = buildExistingSessionUpdate(existingSession, sessionData, contactId);
 
-        const sessionWithName = updated || existingSession;
-        const contactId = await ensureContactForSession(db, {
-          contact_id: sessionWithName.contact_id,
-          name: sessionWithName.name,
-          phone: sessionWithName.phone || sessionData.phone,
-          account_id: sessionWithName.account_id || sessionData.account_id,
-        });
+      const [updatedSession] = await db('user_session')
+        .where({ id: existingSession.id })
+        .update(updatePayload)
+        .returning('*');
 
-        const [sessionWithContact] = await db('user_session')
-          .where({ id: sessionWithName.id })
-          .update({ contact_id: contactId })
-          .returning('*');
+      await updateContactStatusForSession(db, sessionData, contactId);
+      await updateCampaignInboxForSession(db, sessionData, contactId);
 
-        await updateCampaignInboxForSession(db, sessionData, contactId);
+      const sessionResult = updatedSession || { ...existingSession, ...updatePayload };
 
-        return sessionWithContact || sessionWithName;
+      const oldCacheKey = `product-account:${existingSession.phone}`;
+      const newCacheKey = `product-account:${sessionData.phone}`;
+      await invalidateCache(oldCacheKey);
+      if (newCacheKey !== oldCacheKey) {
+        await invalidateCache(newCacheKey);
       }
 
-      if (!existingSession.contact_id) {
-        const contactId = await ensureContactForSession(db, {
-          contact_id: existingSession.contact_id,
-          name: existingSession.name || sessionData.name,
-          phone: existingSession.phone || sessionData.phone,
-          account_id: existingSession.account_id || sessionData.account_id,
-        });
-
-        const [sessionWithContact] = await db('user_session')
-          .where({ id: existingSession.id })
-          .update({ contact_id: contactId })
-          .returning('*');
-
-        await updateCampaignInboxForSession(db, sessionData, contactId);
-
-        return sessionWithContact || existingSession;
-      }
-
-      await updateCampaignInboxForSession(db, sessionData, existingSession.contact_id);
-
-      return existingSession;
+      return sessionResult;
     }
     
     console.log('Nenhuma sessão existente encontrada. Criando nova sessão...');
@@ -168,19 +244,7 @@ const createUserSession = async (sessionData) => {
       account_id: sessionData.account_id,
     });
 
-    // Se um contact_id foi enviado explicitamente, atualizar o status desse contato para 'sent'
-    if (sessionData.contact_id && contactIdForNewSession) {
-      try {
-        await db('contact')
-          .where({ id: contactIdForNewSession })
-          .update({ external_status: 'delivered', updated_at: db.fn.now() });
-      } catch (updateError) {
-        console.error('[createUserSession] Erro ao atualizar status do contato para sent', {
-          contactId: contactIdForNewSession,
-          error: updateError,
-        });
-      }
-    }
+    await updateContactStatusForSession(db, sessionData, contactIdForNewSession);
 
     const newSession = {
       name: sessionData.name,
@@ -188,9 +252,16 @@ const createUserSession = async (sessionData) => {
       account_id: sessionData.account_id,
       product_id: sessionData.product_id,
       contact_id: contactIdForNewSession,
-      created_at: new Date()
-      // A tabela user_session não possui o campo updated_at
+      created_at: new Date(),
+      updated_at: new Date(),
     };
+
+    assignIfPresent(newSession, sessionData, 'message_time');
+    assignIfPresent(newSession, sessionData, 'conversation_funnel_step_id');
+    assignIntegerIfPresent(newSession, sessionData, 'inbox_id');
+    assignIntegerIfPresent(newSession, sessionData, 'inboxId', 'inbox_id');
+    assignIntegerIfPresent(newSession, sessionData, 'conversation_id');
+    assignIntegerIfPresent(newSession, sessionData, 'conversationId', 'conversation_id');
     
     // Buscar o funil associado à conta
     console.log(`Buscando funil associado à conta ${sessionData.account_id}...`);
